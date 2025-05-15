@@ -46,11 +46,11 @@ function action_matrix(M, gamma)
 	return mat;
 end function;
 
-function invariants(M, generators)
+function invariants(M, generators, orientation_character)
 	V := VectorSpace(M`base_field, #M`cosets);
 	
-	for gamma in generators do
-		gamma_action := action_matrix(M, gamma);
+	for i in [1..#generators] do
+		gamma_action := orientation_character[i] * action_matrix(M, generators[i]);
 		V := V meet Kernel(gamma_action - IdentityMatrix(M`base_field, #M`cosets));
 	end for;
 	

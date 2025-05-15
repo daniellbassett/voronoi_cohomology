@@ -9,11 +9,12 @@ import "voronoi.m" : voronoi_data;
 
 equivariant_complex := recformat<
 	//Data about cells
-	orientable_cell_reps : SeqEnum,
+	cell_reps : SeqEnum,
 	cell_rep_stabilisers : SeqEnum,
+	orientation_characters : SeqEnum,	
 	
 	//Data about facets
-	orientable_facets : SeqEnum,
+	facets : SeqEnum,
 	facet_equiv_indices : SeqEnum,
 	facet_equiv_witnesses : SeqEnum,
 	facet_equiv_orientation : SeqEnum, //whether a facet is compatibly-oriented with its equivalent representative
@@ -137,61 +138,6 @@ function cellRepresentatives(top_cells, cone_data, cone_functions, cone_voronoi_
 	return cell_reps, cell_facets, facet_equiv_indices, facet_equiv_witnesses;
 end function;
 
-function orientableRepIndices(cell_reps, cone_data, cone_functions : cone_voronoi_data := rec<voronoi_data | >)
-	indices := [];
-	
-	for dim in cell_reps do
-		Append(~indices, []);
-		for i in [1..#dim] do
-			if cone_functions`isOrientableCell(dim[i], cone_data : cone_voronoi_data := cone_voronoi_data) then
-				Append(~indices[#indices], i);
-			else
-				print "non-orientable cell found";
-			end if;
-		end for;
-	end for;
-	
-	return indices;
-end function;
-
-function orientableRepresentatives(cell_reps, cell_facets, facet_equiv_indices, facet_equiv_witnesses, orientable_rep_indices)
-	orientable_reps := [];
-	orientable_facets := [];
-	orientable_equiv_indices := [];
-	orientable_equiv_witnesses := [];
-	
-	for i in [1..#orientable_rep_indices] do
-		Append(~orientable_reps, []);
-		Append(~orientable_facets, []);
-		Append(~orientable_equiv_indices, []);
-		Append(~orientable_equiv_witnesses, []);
-		
-		for j in [1..#orientable_rep_indices[i]] do
-			Append(~orientable_reps[i], cell_reps[i][orientable_rep_indices[i][j]]);
-			
-			Append(~orientable_facets[i], []);
-			Append(~orientable_equiv_indices[i], []);
-			Append(~orientable_equiv_witnesses[i], []);
-			
-			if i lt #orientable_rep_indices then
-				
-				
-				for k in [1..#cell_facets[i][orientable_rep_indices[i][j]]] do
-					equiv_index := facet_equiv_indices[i][orientable_rep_indices[i][j]][k];
-					
-					if equiv_index in orientable_rep_indices[i+1] then
-						Append(~orientable_facets[i][j], cell_facets[i][orientable_rep_indices[i][j]][k]);
-						Append(~orientable_equiv_indices[i][j], Index(orientable_rep_indices[i+1], equiv_index));
-						Append(~orientable_equiv_witnesses[i][j], facet_equiv_witnesses[i][orientable_rep_indices[i][j]][k]);
-					end if;
-				end for;
-			end if;
-		end for;
-	end for;
-	
-	return orientable_reps, orientable_facets, orientable_equiv_indices, orientable_equiv_witnesses;
-end function;
-
 function orientationCompatibility(orientable_reps, orientable_facets, orientable_equiv_indices, orientable_equiv_witnesses, cone_data, cone_functions)
 	facet_equiv_compatibility := [];
 	facet_cell_compatibility := [];
@@ -204,10 +150,12 @@ function orientationCompatibility(orientable_reps, orientable_facets, orientable
 			Append(~facet_equiv_compatibility[i], []);
 			Append(~facet_cell_compatibility[i], []);
 			
-			for k in [1..#orientable_facets[i][j]] do				
-				Append(~facet_cell_compatibility[i][j], cone_functions`compatibleInducedCellOrientation(cellBasis(orientable_facets[i][j][k], cone_data), cellBasis(orientable_reps[i][j], cone_data)));
-				Append(~facet_equiv_compatibility[i][j], cone_functions`compatibleCellOrientation(cellBasis(orientable_reps[i+1][orientable_equiv_indices[i][j][k]], cone_data), cellBasis(orientable_facets[i][j][k], cone_data), orientable_equiv_witnesses[i][j][k], cone_data));
-			end for;
+			if i lt #orientable_reps then 
+				for k in [1..#orientable_facets[i][j]] do				
+					Append(~facet_cell_compatibility[i][j], cone_functions`compatibleInducedCellOrientation(cellBasis(orientable_facets[i][j][k], cone_data), cellBasis(orientable_reps[i][j], cone_data)));
+					Append(~facet_equiv_compatibility[i][j], cone_functions`compatibleCellOrientation(cellBasis(orientable_reps[i+1][orientable_equiv_indices[i][j][k]], cone_data), cellBasis(orientable_facets[i][j][k], cone_data), orientable_equiv_witnesses[i][j][k], cone_data));
+				end for;
+			end if;
 		end for;
 	end for;
 	
@@ -216,16 +164,24 @@ end function;
 
 function stabilisers(orientable_reps, orientable_facets, cone_data, cone_functions : cone_voronoi_data := rec<voronoi_data | >)
 	cell_rep_stabilisers := [];
+	orientation_characters := [];
+	
 	facet_stabilisers := [];
 	facet_cell_stabiliser_cosets := [];
 	
 	for i in [1..#orientable_reps] do
 		Append(~cell_rep_stabilisers, []);
+		Append(~orientation_characters, []);
 		Append(~facet_stabilisers, []);
 		Append(~facet_cell_stabiliser_cosets, []);
 		
 		for j in [1..#orientable_reps[i]] do
 			Append(~cell_rep_stabilisers[i], cone_functions`stabiliser(rec<homogeneous_cone_point | point := barycentre(orientable_reps[i][j]), minimal_vectors := orientable_reps[i][j]>, cone_data : cone_voronoi_data := cone_voronoi_data));
+			
+			Append(~orientation_characters[i], []);
+			for gamma in cell_rep_stabilisers[i][j] do
+				Append(~orientation_characters[i][j], cone_functions`compatibleCellOrientation(cellBasis(orientable_reps[i][j], cone_data), cellBasis(orientable_reps[i][j], cone_data), gamma, cone_data));
+			end for;
 			
 			Append(~facet_stabilisers[i], []);
 			Append(~facet_cell_stabiliser_cosets[i], [**]);
@@ -245,25 +201,24 @@ function stabilisers(orientable_reps, orientable_facets, cone_data, cone_functio
 		end for;
 	end for;
 	
-	return cell_rep_stabilisers, facet_stabilisers, facet_cell_stabiliser_cosets;
+	return cell_rep_stabilisers, facet_stabilisers, facet_cell_stabiliser_cosets, orientation_characters;
 end function;
 
 function generateComplex(top_cells, cone : cone_voronoi_data := rec<voronoi_data | >)
 	cell_reps, cell_facets, facet_equiv_indices, facet_equiv_witnesses := cellRepresentatives(top_cells, cone`cone_data, cone`cone_functions, cone_voronoi_data);
-	orientability_indices := orientableRepIndices(cell_reps, cone`cone_data, cone`cone_functions : cone_voronoi_data := cone_voronoi_data);
 	
-	orientable_reps, orientable_facets, orientable_equiv_indices, orientable_equiv_witnesses := orientableRepresentatives(cell_reps, cell_facets, facet_equiv_indices, facet_equiv_witnesses, orientability_indices);
+	facet_equiv_compatibility, facet_cell_compatibility := orientationCompatibility(cell_reps, cell_facets, facet_equiv_indices, facet_equiv_witnesses, cone`cone_data, cone`cone_functions);
 	
-	facet_equiv_compatibility, facet_cell_compatibility := orientationCompatibility(orientable_reps, orientable_facets, orientable_equiv_indices, orientable_equiv_witnesses, cone`cone_data, cone`cone_functions);
-	
-	cell_rep_stabilisers, facet_stabilisers, facet_cell_stabiliser_cosets := stabilisers(orientable_reps, orientable_facets, cone`cone_data, cone`cone_functions : cone_voronoi_data := cone_voronoi_data);
+	cell_rep_stabilisers, facet_stabilisers, facet_cell_stabiliser_cosets, orientation_characters := stabilisers(cell_reps, cell_facets, cone`cone_data, cone`cone_functions : cone_voronoi_data := cone_voronoi_data);
 	
 	return rec<equivariant_complex | 
-		orientable_cell_reps := orientable_reps,
+		cell_reps := cell_reps,
 		cell_rep_stabilisers := cell_rep_stabilisers,
-		orientable_facets := orientable_facets,
-		facet_equiv_indices := orientable_equiv_indices,
-		facet_equiv_witnesses := orientable_equiv_witnesses,
+		orientation_characters := orientation_characters,
+		
+		facets := cell_facets,
+		facet_equiv_indices := facet_equiv_indices,
+		facet_equiv_witnesses := facet_equiv_witnesses,
 		facet_equiv_orientation := facet_equiv_compatibility,
 		facet_cell_orientation := facet_cell_compatibility,
 		facet_stabilisers := facet_stabilisers,

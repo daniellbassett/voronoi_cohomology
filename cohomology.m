@@ -7,19 +7,19 @@ TODO: write description
 import "module.m" : invariants, action_permutation, action_matrix;
 
 function coboundaryMap(M, complex, d) //coboundary map in degree d: from dimension d-1 cells to dimension d cells
-	codim := #complex`orientable_cell_reps-d;	
+	codim := #complex`cell_reps-d;	
 	
 	total_matrix := <>;
 	
-	for i in [1..#complex`orientable_cell_reps[codim]] do //a higher-dim cell rep, sigma
-		M_sigma := invariants(M, complex`cell_rep_stabilisers[codim][i]);
+	for i in [1..#complex`cell_reps[codim]] do //a higher-dim cell rep, sigma
+		M_sigma := invariants(M, complex`cell_rep_stabilisers[codim][i], complex`orientation_characters[codim][i]);
 		coord_space := VectorSpace(M`base_field, Dimension(M_sigma));
 		
-		M_taus := [invariants(M, complex`cell_rep_stabilisers[codim+1][j]) : j in [1..#complex`orientable_cell_reps[codim+1]]];
+		M_taus := [invariants(M, complex`cell_rep_stabilisers[codim+1][j], complex`orientation_characters[codim+1][j]) : j in [1..#complex`cell_reps[codim+1]]];
 		
-		sigma_matrix := <RMatrixSpace(M`base_field, Dimension(M_taus[j]), Dimension(M_sigma)) ! 0 : j in [1..#complex`orientable_cell_reps[codim+1]]>;
+		sigma_matrix := <RMatrixSpace(M`base_field, Dimension(M_taus[j]), Dimension(M_sigma)) ! 0 : j in [1..#complex`cell_reps[codim+1]]>;
 		
-		for j in [1..#complex`orientable_facets[codim][i]] do //a facet of sigma, tau
+		for j in [1..#complex`facets[codim][i]] do //a facet of sigma, tau
 			if #complex`facet_cell_stabiliser_cosets[codim][i][j] eq 1 then //facet stabiliser contains cell stabiliser
 				index := complex`facet_equiv_indices[codim][i][j];
 				gamma := complex`facet_equiv_witnesses[codim][i][j];
@@ -89,7 +89,7 @@ function cohomology(M, complex, degrees, with_torsion)
 			Append(~required_coboundary_degrees, d);
 		end if;
 		
-		if d+1 lt #complex`orientable_cell_reps then
+		if d+1 lt #complex`cell_reps then
 			Append(~required_coboundary_degrees, d+1);
 		end if;
 	end for;
@@ -125,7 +125,7 @@ function cohomology(M, complex, degrees, with_torsion)
 		for d in degrees do
 			if d eq 0 then
 				Append(~data, [coboundary_rows[1] - coboundary_ranks[1], 1]);
-			elif d+1 ne #complex`orientable_cell_reps then
+			elif d+1 ne #complex`cell_reps then
 				i := Index(required_coboundary_degrees, d);
 				Append(~data, [coboundary_rows[i+1] - coboundary_ranks[i+1] - coboundary_ranks[i], &*coboundary_divisors[i]]);
 				
@@ -139,7 +139,7 @@ function cohomology(M, complex, degrees, with_torsion)
 			if d eq 0 then
 				Append(~data, coboundary_rows[1] - coboundary_ranks[1]);
 				//print "ker:", coboundary_rows[1], "im:", coboundary_ranks[1];
-			elif d+1 ne #complex`orientable_cell_reps then
+			elif d+1 ne #complex`cell_reps then
 				i := Index(required_coboundary_degrees, d);
 				Append(~data, coboundary_rows[i+1] - coboundary_ranks[i+1] - coboundary_ranks[i]);
 				//print "ker:", coboundary_rows[i+1] - coboundary_ranks[i+1], "im:", coboundary_ranks[i];
