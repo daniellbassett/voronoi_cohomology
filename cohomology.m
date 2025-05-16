@@ -21,7 +21,11 @@ function coboundaryMap(M, complex, d) //coboundary map in degree d: from dimensi
 		
 		for j in [1..#complex`facets[codim][i]] do //a facet of sigma, tau
 			if #complex`facet_cell_stabiliser_cosets[codim][i][j] eq 1 then //facet stabiliser contains cell stabiliser
-				index := complex`facet_equiv_indices[codim][i][j];				
+				index := complex`facet_equiv_indices[codim][i][j];
+				if Dimension(M_taus[index]) eq 0 then
+					continue;
+				end if;
+						
 				gamma := complex`facet_equiv_witnesses[codim][i][j];
 				
 				if gamma eq 1 then
@@ -57,7 +61,11 @@ function coboundaryMap(M, complex, d) //coboundary map in degree d: from dimensi
 				//corestriction map: must sum over cosets
 				//print "cores used in degree", d;
 				//print "corestriction";
-				index := complex`facet_equiv_indices[codim][i][j];				
+				index := complex`facet_equiv_indices[codim][i][j];
+				if Dimension(M_taus[index]) eq 0 then
+					continue;
+				end if;
+								
 				gamma := complex`facet_equiv_witnesses[codim][i][j];
 				
 				M_matrix := MatrixRing(M`base_field, #M`cosets) ! 0;
