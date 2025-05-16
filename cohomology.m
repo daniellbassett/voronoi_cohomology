@@ -21,10 +21,11 @@ function coboundaryMap(M, complex, d) //coboundary map in degree d: from dimensi
 		
 		for j in [1..#complex`facets[codim][i]] do //a facet of sigma, tau
 			if #complex`facet_cell_stabiliser_cosets[codim][i][j] eq 1 then //facet stabiliser contains cell stabiliser
-				index := complex`facet_equiv_indices[codim][i][j];
+				index := complex`facet_equiv_indices[codim][i][j];				
 				gamma := complex`facet_equiv_witnesses[codim][i][j];
 				
 				if gamma eq 1 then
+					//print "standard";
 					rows := [];
 					
 					for k in [1..Dimension(M_taus[index])] do
@@ -38,6 +39,7 @@ function coboundaryMap(M, complex, d) //coboundary map in degree d: from dimensi
 					//end if;
 				else
 					//print "used in degree", d;
+					//print "permutation";
 					permutation := action_permutation(M, gamma); //for some reason gamma^-1 makes it not crash but we still get negative answers
 					rows := [];
 					
@@ -54,7 +56,8 @@ function coboundaryMap(M, complex, d) //coboundary map in degree d: from dimensi
 			else
 				//corestriction map: must sum over cosets
 				//print "cores used in degree", d;
-				index := complex`facet_equiv_indices[codim][i][j];
+				//print "corestriction";
+				index := complex`facet_equiv_indices[codim][i][j];				
 				gamma := complex`facet_equiv_witnesses[codim][i][j];
 				
 				M_matrix := MatrixRing(M`base_field, #M`cosets) ! 0;
@@ -104,18 +107,39 @@ function cohomology(M, complex, degrees, with_torsion)
 	coboundary_maps := [**];
 
 	for d in required_coboundary_degrees do
-		map := coboundaryMap(M, complex, d);
-		
-		Append(~coboundary_ranks, Rank(map));
-		Append(~coboundary_rows, NumberOfRows(map));
-		Append(~coboundary_columns, NumberOfColumns(map));
-		
-		Append(~coboundary_maps, map);
-		//print map;
-		
-		if with_torsion then
-			map := ChangeRing(map, Integers());
-			Append(~coboundary_divisors, ElementaryDivisors(map));
+		codim := #complex`cell_reps-d;
+		if #complex`cell_reps[codim] eq 0 or #complex`cell_reps[codim+1] eq 0 then
+			Append(~coboundary_ranks, 0);
+			
+			rows := 0;
+			columns := 0;
+			
+			for i in [1..#complex`cell_reps[codim]] do
+				columns +:= Dimension(invariants(M, complex`cell_rep_stabilisers[codim][i], complex`orientation_characters[codim][i]));
+			end for;
+			
+			for i in [1..#complex`cell_reps[codim+1]] do
+				rows +:= Dimension(invariants(M, complex`cell_rep_stabilisers[codim+1][i], complex`orientation_characters[codim+1][i]));
+			end for;
+			
+			Append(~coboundary_rows, rows);
+			Append(~coboundary_columns, columns);
+			
+			Append(~coboundary_divisors, [1]);
+		else
+			map := coboundaryMap(M, complex, d);
+			
+			Append(~coboundary_ranks, Rank(map));
+			Append(~coboundary_rows, NumberOfRows(map));
+			Append(~coboundary_columns, NumberOfColumns(map));
+			
+			Append(~coboundary_maps, map);
+			//print map;
+			
+			if with_torsion then
+				map := ChangeRing(map, Integers());
+				Append(~coboundary_divisors, ElementaryDivisors(map));
+			end if;
 		end if;
 	end for;
 	map := Integers() ! 0;
