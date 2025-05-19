@@ -40,6 +40,8 @@ function action_matrix(M, gamma)
 	for i in [1..#M`cosets] do
 		image := M`coset_recog(M`action(M`cosets[i], gamma));
 		
+		//print gamma;
+		//print Index(M`cosets, image);
 		mat[i, Index(M`cosets, image)] := 1;
 	end for;
 	
@@ -132,6 +134,26 @@ function isotropicPoints(level, cone_data)
 	return Sort(isotropic_points);
 end function;
 
+function isotropicOrbitLevelTwo(cone_data)
+	n := Dimension(cone_data`ambient_space) - 1;
+	q := [-InnerProduct(cone_data`ambient_space)[i,i] : i in [1..n]];
+	level := FiniteField(2,1);
+	
+	V_p := VectorSpace(level, n+1, DiagonalMatrix(level, n+1, [-q[i] : i in [1..n]] cat [1]));
+	
+	G := DerivedGroup(IsometryGroup(V_p));
+	initial_point := V_p ! ([1,1] cat [0 : i in [1..n-1]]);
+	isotropic_points := [initial_point];
+	for g in G do
+		action := initial_point * g;
+		if action notin isotropic_points then
+			Append(~isotropic_points, action);
+		end if;
+	end for;
+	
+	return Sort(isotropic_points);
+end function;
+
 function lorentzGamma0_action(isotropic_point, gamma)
 	return isotropic_point * gamma;
 end function;
@@ -153,8 +175,17 @@ function lorentzGamma0Module(base_field, level, cone)
 		print "Error in Lorentz Gamma_0 module generation: composite levels not yet supported.";
 		return false;
 	elif level eq 2 then
-		print "Error in Lorentz Gamma_0 module generation: p=2 not yet supported.";
-		return false;
+		return rec<coinduced_module | 
+			type := "lorentz_dim1",
+			
+			base_field := base_field,
+			level := level,
+			
+			coset_ring := FiniteField(level, 1),
+			cosets := isotropicOrbitLevelTwo(cone`cone_data),
+			coset_recog := projectiveStandardForm,
+			action := lorentzGamma0_action
+		>;
 	end if;
 	
 	return rec<coinduced_module | 
