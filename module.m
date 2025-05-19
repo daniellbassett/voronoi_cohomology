@@ -112,6 +112,10 @@ function projectiveStandardForm(v) //normalises so that the first non-zero coord
 	end for;
 end function;
 
+function projectiveStandardFormCartesian(v)
+	return <projectiveStandardForm(vec) : vec in v>;
+end function;
+
 function isotropicPoints(level, cone_data)
 	n := Dimension(cone_data`ambient_space) - 1;
 	q := [-InnerProduct(cone_data`ambient_space)[i,i] : i in [1..n]];
@@ -132,6 +136,18 @@ function isotropicPoints(level, cone_data)
 	end for;
 	
 	return Sort(isotropic_points);
+end function;
+
+function isotropicPointsCartesian(level, cone_data)
+	primes := PrimeFactors(level);
+	
+	prime_levels := <>;
+	for p in primes do
+		Append(~prime_levels, isotropicPoints(FiniteField(p,1), cone_data));
+	end for;
+	
+	print #CartesianProduct(prime_levels);
+	return [v : v in CartesianProduct(prime_levels)];
 end function;
 
 function isotropicOrbitLevelTwo(cone_data)
@@ -158,6 +174,11 @@ function lorentzGamma0_action(isotropic_point, gamma)
 	return isotropic_point * gamma;
 end function;
 
+function lorentzGamma0_actionCartesian(isotropic_point, gamma)
+	primes := PrimeFactors(Characteristic(Parent(gamma[1,1])));
+	return <isotropic_point[i] * ChangeRing(gamma, FiniteField(primes[i], 1)) : i in [1..#isotropic_point]>;
+end function;
+
 function lorentzGamma0Module(base_field, level, cone)
 	if level eq 1 then
 		return rec<coinduced_module | 
@@ -171,9 +192,21 @@ function lorentzGamma0Module(base_field, level, cone)
 			coset_recog := func<v | VectorSpace(base_field, 1).1>,
 			action := func<v, w | VectorSpace(base_field, 1).1>
 		>;
-	elif not IsPrime(level) then
-		print "Error in Lorentz Gamma_0 module generation: composite levels not yet supported.";
+	elif not IsSquarefree(level) then
+		print "Error in Lorentz Gamma_0 module generation: only squarefree levels supported.";
 		return false;
+	elif not IsPrime(level) then
+		return rec<coinduced_module | 
+			type := "lorentz_dim1",
+			
+			base_field := base_field,
+			level := level,
+			
+			coset_ring := quo<Integers() | level*Integers()>,
+			cosets := isotropicPointsCartesian(level, cone`cone_data),
+			coset_recog := projectiveStandardFormCartesian,
+			action := lorentzGamma0_actionCartesian
+		>;
 	elif level eq 2 then
 		return rec<coinduced_module | 
 			type := "lorentz_dim1",
@@ -186,17 +219,17 @@ function lorentzGamma0Module(base_field, level, cone)
 			coset_recog := projectiveStandardForm,
 			action := lorentzGamma0_action
 		>;
+	else
+		return rec<coinduced_module | 
+			type := "lorentz_dim1",
+			
+			base_field := base_field,
+			level := level,
+			
+			coset_ring := FiniteField(level, 1),
+			cosets := isotropicPoints(FiniteField(level,1), cone`cone_data),
+			coset_recog := projectiveStandardForm,
+			action := lorentzGamma0_action
+		>;
 	end if;
-	
-	return rec<coinduced_module | 
-		type := "lorentz_dim1",
-		
-		base_field := base_field,
-		level := level,
-		
-		coset_ring := FiniteField(level, 1),
-		cosets := isotropicPoints(FiniteField(level,1), cone`cone_data),
-		coset_recog := projectiveStandardForm,
-		action := lorentzGamma0_action
-	>;
 end function;
