@@ -138,18 +138,6 @@ function isotropicPoints(level, cone_data)
 	return Sort(isotropic_points);
 end function;
 
-function isotropicPointsCartesian(level, cone_data)
-	primes := PrimeFactors(level);
-	
-	prime_levels := <>;
-	for p in primes do
-		Append(~prime_levels, isotropicPoints(FiniteField(p,1), cone_data));
-	end for;
-	
-	print #CartesianProduct(prime_levels);
-	return [v : v in CartesianProduct(prime_levels)];
-end function;
-
 function isotropicOrbitLevelTwo(cone_data)
 	n := Dimension(cone_data`ambient_space) - 1;
 	q := [-InnerProduct(cone_data`ambient_space)[i,i] : i in [1..n]];
@@ -172,6 +160,22 @@ end function;
 
 function lorentzGamma0_action(isotropic_point, gamma)
 	return isotropic_point * gamma;
+end function;
+
+function isotropicPointsCartesian(level, cone_data)
+	primes := PrimeFactors(level);
+	
+	prime_levels := <>;
+	for p in primes do
+		if p gt 2 then
+			Append(~prime_levels, isotropicPoints(FiniteField(p,1), cone_data));
+		else
+			Append(~prime_levels, isotropicOrbitLevelTwo(cone_data));
+		end if;
+	end for;
+	
+	print #CartesianProduct(prime_levels);
+	return [v : v in CartesianProduct(prime_levels)];
 end function;
 
 function lorentzGamma0_actionCartesian(isotropic_point, gamma)
