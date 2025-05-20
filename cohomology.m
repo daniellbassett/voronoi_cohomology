@@ -12,12 +12,11 @@ function coboundaryMap(M, complex, d) //coboundary map in degree d: from dimensi
 	
 	total_matrix := <>;
 	
+	M_taus := [invariants(M, complex`cell_rep_stabilisers[codim+1][j], complex`orientation_characters[codim+1][j]) : j in [1..#complex`cell_reps[codim+1]]];
 	for i in [1..#complex`cell_reps[codim]] do //a higher-dim cell rep, sigma
 		print "\t\tcoboundary: Cell", i, "of", #complex`cell_reps[codim];
 		M_sigma := invariants(M, complex`cell_rep_stabilisers[codim][i], complex`orientation_characters[codim][i]);
 		coord_space := VectorSpace(M`base_field, Dimension(M_sigma));
-		
-		M_taus := [invariants(M, complex`cell_rep_stabilisers[codim+1][j], complex`orientation_characters[codim+1][j]) : j in [1..#complex`cell_reps[codim+1]]];
 		
 		sigma_matrix := <RMatrixSpace(M`base_field, Dimension(M_taus[j]), Dimension(M_sigma)) ! 0 : j in [1..#complex`cell_reps[codim+1]]>;
 		
