@@ -743,6 +743,7 @@ function lorentz_compatibleInducedCellOrientation(low_basis, high_basis)
 	end if;
 end function;
 
+/*
 function lorentz_stabiliser_general(v_rec, cone_data : cone_voronoi_data := rec<voronoi_data | >, special := true)
 	if assigned cone_voronoi_data`perfect_points then
 		v := v_rec`point;
@@ -871,6 +872,62 @@ function lorentz_stabiliser_general(v_rec, cone_data : cone_voronoi_data := rec<
 		
 		return matrixGroupGenerators(stab);		
 	end if;
+end function;
+*/
+
+function lorentz_stabiliser_general(v_rec, cone_data : cone_voronoi_data := rec<voronoi_data | >, special := true)
+	v := v_rec`point;
+	v := lorentz_clearDenoms([v])[1];
+	
+	n := cone_data`matrix_size - 1;
+	q := [-InnerProduct(cone_data`ambient_space)[i,i] : i in [1..n]];
+	J_Z := DiagonalMatrix(Integers(), [-1 : i in [1..n]] cat [1]); 
+	
+	K<rtd> := QuadraticField(Integers() ! q[1]);
+	D := DiagonalMatrix(K, [rtd] cat [1 : i in [1..n]]);
+	J := ChangeRing(J_Z, K);
+	
+	v_scaled := (VectorSpace(K, n+1) ! v) * D; //rescale to standard Lorentz cone
+	v_posrep := 2*(MatrixRing(K, NumberOfColumns(v)) ! Eltseq(TensorProduct(v_scaled, v_scaled))) - J;
+	
+	L := NumberFieldLatticeWithGram(v_posrep);
+	//print "lattice ready";
+	G := AutomorphismGroup(L);
+	//print "NF-lattice automorphism group calculated";
+	stab := [];
+	//print #G;
+	for g in G do
+		if g * J * Transpose(g) eq J then
+			gamma := Transpose(g);
+			if v_scaled * gamma ne v_scaled then
+				gamma := -gamma;
+			end if;
+			
+			if Determinant(gamma) eq 1 or not special then
+				gamma := D * gamma * D^-1;
+				integral := true;
+				for i in [1..NumberOfRows(gamma)] do
+					for j in [1..NumberOfColumns(gamma)] do
+						//check if gamma[i,j] is an integer
+						if not IsIntegral(gamma[i,j]) or Eltseq(gamma[i,j])[2] ne 0 then
+							integral := false;
+							break;
+						end if;
+					end for;
+					
+					if not integral then
+						break;
+					end if;
+				end for;
+				
+				if integral then
+					Append(~stab, ChangeRing(gamma, Rationals()));
+				end if;
+			end if;
+		end if;
+	end for;
+	
+	return matrixGroupGenerators(stab);
 end function;
 
 function lorentz_equivalent_general(v_rec, w_rec, cone_data : cone_voronoi_data := rec<voronoi_data | >)	
@@ -1118,7 +1175,6 @@ function lorentz_equivalent_general(v_rec, w_rec, cone_data : cone_voronoi_data 
 		end if;
 	end if;
 end function;
-
 
 /*
 lorentz equivalence testing alternative idea:
