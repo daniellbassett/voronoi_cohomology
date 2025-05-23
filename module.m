@@ -4,7 +4,6 @@
 TODO: write description
 */
 
-
 //Record of the data associated with a coinduced module, 
 coinduced_module := recformat<
 	type,
@@ -234,6 +233,102 @@ function lorentzGamma0Module(base_field, level, cone)
 			cosets := isotropicPoints(FiniteField(level,1), cone`cone_data),
 			coset_recog := projectiveStandardForm,
 			action := lorentzGamma0_action
+		>;
+	end if;
+end function;
+
+
+//--------------------------------------------------LORENTZ HIGHER ISOTROPIC STABILISERS--------------------------------------------------
+function isotropicSpaces(level, dimension, cone_data)
+	points := isotropicPoints(level, cone_data);
+	
+	n := Dimension(cone_data`ambient_space) - 1;
+	q := [-InnerProduct(cone_data`ambient_space)[i,i] : i in [1..n]];
+	V_p := VectorSpace(level, n+1, DiagonalMatrix(level, n+1, [-q[i] : i in [1..n]] cat [1]));
+	
+	if dimension eq 1 then
+		return points;
+	elif dimension eq 2 then
+		spaces := [];
+		for i in [1..#points] do
+			for j in [i+1..#points] do
+				if InnerProduct(points[i], points[j]) eq 0 then
+					space := sub<V_p | [points[i], points[j]]>;
+					if space notin spaces then
+						Append(~spaces, space);
+					end if;
+				end if;
+			end for;
+		end for;
+		
+		return spaces;
+	end if;
+	
+	codim_one := isotropicSpaces(level, dimension-1, cone_data);
+	spaces := [];
+	for space in codim_one do
+		for point in points do
+			if point in space then
+				continue;
+			end if;
+			
+			isotropic := true;
+			for i in [1..Dimension(space)] do
+				if InnerProduct(point, space.i) ne 0 then
+					isotropic := false;
+					break;
+				end if;
+			end for;
+			
+			if isotropic then
+				subspace := sub<V_p | Basis(space) cat [point]>;
+				if subspace notin spaces then
+					Append(~spaces, subspace);
+				end if;
+			end if;
+		end for;
+	end for;
+	
+	return spaces;
+end function;
+
+function lorentzIsotropic_action(space, gamma)
+	V_p := VectorSpace(Parent((space.1)[1]), NumberOfColumns(space.1), DiagonalMatrix(Parent((space.1)[1]), 6, [-1,-1,-1,-1,-1,1]));
+	
+	basis := [space.i * gamma : i in [1..Dimension(space)]];
+	return sub<V_p | basis>;
+end function;
+
+function lorentzIsotropicStabiliserModule(base_field, level, dimension, cone)
+	if level eq 1 then
+		return rec<coinduced_module | 
+			type := "lorentz_higher",
+			
+			base_field := base_field,
+			level := level,
+			
+			coset_ring := base_field,
+			cosets := [VectorSpace(base_field, 1).1],
+			coset_recog := func<v | VectorSpace(base_field, 1).1>,
+			action := func<v, w | VectorSpace(base_field, 1).1>
+		>;
+	elif not IsPrime(level) then
+		print "Error in Lorentz isotropic stabiliser module generation: composite levels not yet supported";
+	elif level eq 2 then
+		print "Error in Lorentz isotropic stabiliser module generation: p=2 not yet supported";
+	elif dimension gt cone`cone_data`matrix_size div 2 then
+		print "Error in Lorentz isotropic stabiliser module generation: dimension > 1/2 (n+1) not allowed";
+	else
+		return rec<coinduced_module | 
+			type := "lorentz_higher",
+			
+			base_field := base_field,
+			level := level,
+			
+			coset_ring := FiniteField(level, 1),
+			cosets := isotropicSpaces(FiniteField(level, 1), dimension, cone`cone_data),
+			coset_recog := func<v | v>,
+			action := lorentzIsotropic_action
 		>;
 	end if;
 end function;
