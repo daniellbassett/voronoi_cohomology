@@ -930,261 +930,41 @@ function lorentz_stabiliser_general(v_rec, cone_data : cone_voronoi_data := rec<
 	return matrixGroupGenerators(stab);
 end function;
 
-function lorentz_equivalent_general(v_rec, w_rec, cone_data : cone_voronoi_data := rec<voronoi_data | >)	
+function lorentz_equivalent_general(v_rec, w_rec, cone_data : cone_voronoi_data := rec<voronoi_data | >)
 	n := cone_data`matrix_size - 1;
-	J := InnerProduct(cone_data`ambient_space);
-
-	if assigned cone_voronoi_data`perfect_points then		
-		v := v_rec`point;
-		w := w_rec`point;
-		
-		//Find which Voronoi cone(s) v and w lie within
-		for i in [1..#cone_voronoi_data`perfect_points] do
-			perfect_product := InnerProduct(v, cone_voronoi_data`perfect_points[i]`point);
-			best := true;
-			equalling_facets_v := [];
-			
-			for j in [1..#cone_voronoi_data`neighbours[i]] do
-				product := InnerProduct(v, cone_voronoi_data`neighbours[i][j]`point);
-				
-				if product lt perfect_product then
-					best := false;
-					break;
-				elif product eq perfect_product then
-					Append(~equalling_facets_v, j);
-				end if;
-			end for;
-			
-			if best then
-				containing_rep_v := i;
-				containing_classes_v := Sort([i] cat [cone_voronoi_data`neighbour_equiv_indices[i][j] : j in equalling_facets_v]);
-				break;
-			end if;
-		end for;
-		
-		for i in [1..#cone_voronoi_data`perfect_points] do
-			perfect_product := InnerProduct(w, cone_voronoi_data`perfect_points[i]`point);
-			best := true;
-			equalling_facets_w := [];
-			
-			for j in [1..#cone_voronoi_data`neighbours[i]] do
-				product := InnerProduct(w, cone_voronoi_data`neighbours[i][j]`point);
-				
-				if product lt perfect_product then
-					best := false;
-					break;
-				elif product eq perfect_product then
-					Append(~equalling_facets_w, j);
-				end if;
-			end for;
-			
-			if best then
-				containing_rep_w := i;
-				containing_classes_w := Sort([i] cat [cone_voronoi_data`neighbour_equiv_indices[i][j] : j in equalling_facets_w]);
-				break;
-			end if;
-		end for;
-		
-		if containing_classes_v eq containing_classes_w then
-			multiplicities := [0 : i in [1..#cone_voronoi_data`perfect_points]];
-			for i in [1..#containing_classes_v] do
-				multiplicities[containing_classes_v[i]] +:= 1;
-			end for;
-			
-			unique_class := Index(multiplicities, 1);
-			if unique_class gt 0 then
-				//move v, w into the rep of class unique_class
-				if containing_rep_v eq unique_class then
-					gamma_v := MatrixRing(Rationals(), n+1) ! 1;
-					v_prime := v;
-				else
-					for i in equalling_facets_v do
-						if cone_voronoi_data`neighbour_equiv_indices[containing_rep_v][i] eq unique_class then
-							gamma_v := cone_voronoi_data`neighbour_equiv_witnesses[containing_rep_v][i];
-							v_prime := v * gamma_v^-1;
-							break;
-						end if;
-					end for;
-				end if;
-				
-				if containing_rep_w eq unique_class then
-					gamma_w := MatrixRing(Rationals(), n+1) ! 1;
-					w_prime := w;
-				else
-					for i in equalling_facets_w do
-						if cone_voronoi_data`neighbour_equiv_indices[containing_rep_w][i] eq unique_class then
-							gamma_w := cone_voronoi_data`neighbour_equiv_witnesses[containing_rep_w][i];
-							w_prime := w * gamma_w;
-							break;
-						end if;
-					end for;
-				end if;
-				
-				//look for equivalence of v_prime and w_prime by the stabiliser of unique_class's rep
-				for gamma in cone_voronoi_data`perfect_stabilisers[unique_class] do
-					if v_prime * gamma eq w_prime then
-						if Determinant(gamma_v^-1 * gamma * gamma_w) eq 1 then
-							return true, gamma_v^-1 * gamma * gamma_w;
-						else
-							stab := lorentz_stabiliser_general(w_rec, cone_data : cone_voronoi_data := cone_voronoi_data, special := false); //O(n,1) stabiliser
-							for g in stab do
-								if Determinant(g) eq -1 then
-									return true, gamma_v^-1 * gamma * gamma_w * g;
-								end if;
-							end for;
-							return false, false;
-						end if;
-					end if;
-				end for;
-				
-				return false, false;
-			else
-				//move w so that v, w_prime are both minimised by the rep of index containing_rep_v
-				if containing_rep_w eq containing_rep_v then
-					gamma_w := MatrixRing(Rationals(), n+1) ! 1;
-					w_prime := w;
-				else
-					for i in equalling_facets_w do
-						if cone_voronoi_data`neighbour_equiv_indices[containing_rep_w][i] eq containing_rep_v then
-							gamma_w := cone_voronoi_data`neighbour_equiv_witnesses[containing_rep_w][i];
-							w_prime := w * gamma_w;
-							break;
-						end if;
-					end for;
-				end if;
-				
-				cosets := [MatrixRing(Rationals(), n+1) ! 1];
-				for i in [1..#cone_voronoi_data`neighbours[containing_rep_v]] do
-					if cone_voronoi_data`neighbour_equiv_indices[containing_rep_v][i] eq containing_rep_v then
-						Append(~cosets, cone_voronoi_data`neighbour_equiv_witnesses[containing_rep_v][i]);
-					end if;
-				end for;
-				
-				for gamma in cone_voronoi_data`perfect_stabilisers[containing_rep_v] do
-					v_prime := v * gamma;
-					for g in cosets do
-						if v_prime * g eq w_prime then
-							if Determinant(gamma * g * gamma_w) eq 1 then
-								return true, gamma * g * gamma_w;
-							else
-								stab := lorentz_stabiliser_general(w_rec, cone_data : cone_voronoi_data := cone_voronoi_data, special := false); //O(n,1) stabiliser
-								for h in stab do
-									if Determinant(h) eq -1 then
-										return true, gamma * g * gamma_w * h;
-									end if;
-								end for;
-								
-								return false, false;
-							end if;
-						end if;
-					end for;
-				end for;
-				
-				return false, false;
-			end if;
-		else
-			return false, false;
-		end if;
-	else		
-		min_vecs_v := v_rec`minimal_vectors;
-		min_vecs_w := w_rec`minimal_vectors;
+	q := [-InnerProduct(cone_data`ambient_space)[i,i] : i in [1..n]];
 	
-		if #min_vecs_v eq #min_vecs_w then
-			if lorentz_norm(v_rec`point) eq lorentz_norm(w_rec`point) then //naive geometric invariants do not distinguish
-				print "	equivalence:", #min_vecs_v, "minimal vectors each";
-				v_cell_basis := cellBasis(min_vecs_v, cone_data);
-				
-				M := VerticalJoin(v_cell_basis);
-				M_inv := M^-1;
-				
-				v_form_invariants := [lorentz_innerProduct(v_cell_basis[1], v_cell_basis[i]) : i in [2..n+1]];			
-				
-				for vec1 in min_vecs_w do
-					w_form_invariants := [lorentz_innerProduct(vec1, vec) : vec in min_vecs_w];
-					//print w_form_invariants;
-					
-					possible := true;
-					invariant_match_indices := [[] : i in [1..n]]; //find which minimal vectors of w give the correct inner product to match with those of v_cell_basis
-					for i in [1..n] do
-						invariant_match_indices[i] := [j : j in [1..#w_form_invariants] | w_form_invariants[j] eq v_form_invariants[i]];
-						
-						if #invariant_match_indices[i] eq 0 then
-							possible := false;
-							break;
-						end if;
-					end for;
-					
-					if not possible then
-						continue;
-					end if;
-					
-					//iterate over candidates
-					multi_index := [1 : i in [1..n]];
-					while multi_index[n] le #invariant_match_indices[n] do
-						//construct
-						N := VerticalJoin([vec1] cat [min_vecs_w[invariant_match_indices[i][multi_index[i]]] : i in [1..n]]);
-						gamma := M_inv * N;
-						
-						//check
-						integral := true;
-						for i in [1..n+1] do
-							for j in [1..n+1] do
-								if not IsIntegral(gamma[i,j]) then
-									integral := false;
-									break;
-								end if;
-							end for;
-						end for;
-						
-						if integral then
-							if gamma * J * Transpose(gamma) eq J then
-								//print count;
-								if Determinant(gamma) eq 1 then
-									return true, gamma;
-								else
-									stab := lorentz_stabiliser_general(w_rec, cone_data : cone_voronoi_data := cone_voronoi_data, special := false); //O(n,1) stabiliser
-									for g in stab do
-										if Determinant(g) eq -1 then
-											return true, gamma * g;
-										end if;
-									end for;
-									
-									return false, false;
-								end if;
-							end if;
-						end if;
-						
-						//next candidate
-						multi_index[1] +:= 1;
-						for i in [1..n-1] do
-							if multi_index[i] gt #invariant_match_indices[i] then
-								multi_index[i] := 1;
-								multi_index[i+1] +:= 1;
-							end if;
-						end for;
-					end while;
-				end for;
-				
-				//print count;
-				return false, false; //none found
-			else
-				return false, false;
-			end if;
+	Q := RationalsAsNumberField();
+	L := NumberFieldLatticeWithGram(DiagonalMatrix(Q, n+1, q cat [-1]));
+	
+	v := v_rec`point;
+	w := w_rec`point;
+	
+	rescaled := lorentz_clearDenoms([v,w]);
+	v := rescaled[1];
+	w := rescaled[2];
+	
+	v := L ! v;
+	w := L ! w;
+	
+	equiv, equiv_by := IsIsometric(L, w, v);
+	
+	if equiv then
+		if Determinant(equiv_by) eq 1 then
+			return true, equiv_by;
 		else
-			return false, false;
+			G, _ := AutomorphismGroup(L, v);
+			for g in G do
+				if Determinant(g) eq -1 then
+					return true, g * equiv_by;
+				end if;
+			end for; 
+			return false, false; //no det -1 to multiply by :(
 		end if;
+	else
+		return false, false;
 	end if;
 end function;
-
-/*
-lorentz equivalence testing alternative idea:
-	create the matrix of inner products between all minimal vectors, for each form
-	note that the entries will all be positive by self-adjointness of the cone
-	use lattice isometry methods, preserving the standard inner product, to search for elements of O(N; Z) that take one matrix of inner products to the other
-	we should actually get a permutation this way, since both matrices only have positive entries
-	
-	then we can check for each one of these whether it gives us an element of SO(n,1)
-*/
 
 function lorentz_isOrientableCell_general(vertices, cone_data : cone_voronoi_data := rec<voronoi_data | >)
 	v := barycentre(vertices);
