@@ -115,7 +115,11 @@ function invariants(M, generators, orientation_character : cartesian := false)
 	
 	for i in [1..#generators] do
 		gamma_action := action_matrix(M, generators[i], orientation_character[i] : cartesian := cartesian);
-		V := V meet Kernel(gamma_action - IdentityMatrix(M`base_field, #M`cosets));
+		for j in [1..#M`cosets] do
+			gamma_action[j,j] -:= 1;
+		end for;
+		//V := V meet Kernel(gamma_action - IdentityMatrix(M`base_field, #M`cosets));
+		V := V meet Nullspace(gamma_action);
 	end for;
 	
 	return V;
