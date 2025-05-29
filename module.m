@@ -46,6 +46,8 @@ function action_permutation(M, gamma : cartesian := false)
 			Append(~sigma, index);
 		end for;
 		
+		return sigma;
+		
 		tau := [1..#sigma];
 		for i in [1..#sigma] do
 			tau[sigma[i]] = i;
@@ -112,17 +114,57 @@ end function;
 
 function invariants(M, generators, orientation_character : cartesian := false)
 	V := VectorSpace(M`base_field, #M`cosets);
+	W := V;
 	
-	for i in [1..#generators] do
-		gamma_action := action_matrix(M, generators[i], orientation_character[i] : cartesian := cartesian);
-		for j in [1..#M`cosets] do
-			gamma_action[j,j] -:= 1;
-		end for;
-		//V := V meet Kernel(gamma_action - IdentityMatrix(M`base_field, #M`cosets));
-		V := V meet Nullspace(gamma_action);
+	for g in [1..#generators] do
+		g_permutation := action_permutation(M, generators[g] : cartesian := cartesian);
+		
+		//calculate the disjoint cycles of g_permutation
+		cycles := [];
+		unused := [1..#M`cosets];
+		
+		while #unused gt 0 do
+			start := unused[1];
+			cycle := [start];
+			Exclude(~unused, start);
+			
+			while g_permutation[cycle[#cycle]] ne start do
+				Exclude(~unused, g_permutation[cycle[#cycle]]);
+				Append(~cycle, g_permutation[cycle[#cycle]]);
+			end while;
+			
+			Append(~cycles, cycle);
+		end while;
+		
+		//build invariants based on the cycles and character
+		if orientation_character[g] eq 1 then
+			basis := [];
+			
+			for cycle in cycles do
+				v := V ! 0;
+				for i in cycle do
+					v[i] := 1;
+				end for;
+				Append(~basis, v);
+			end for;
+		else //-1
+			basis := [];
+			
+			for cycle in cycles do
+				if #cycle mod 2 eq 0 then
+					v := V ! 0;
+					for i in [1..#cycle] do
+						v[cycle[i]] := (-1)^i;
+					end for;
+					
+					Append(~basis, v);
+				end if;
+			end for;
+		end if;
+		
+		W := W meet sub<V | basis>;
 	end for;
-	
-	return V;
+	return W;
 end function;
 
 //--------------------------------------------------BIANCHI GAMMA_0--------------------------------------------------
