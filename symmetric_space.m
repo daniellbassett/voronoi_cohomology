@@ -63,6 +63,16 @@ function matrixGroupGenerators(G)
 		end if;
 	end for;
 	
+	G_set := {g : g in G};
+	for d in [1..#generators-1] do
+		for S in Subsets(G_set, d) do
+			H := MatrixGroup<NumberOfRows(G[1]), Rationals() | [g : g in S]>;
+			if #H eq #G then
+				return [s : s in S];
+			end if;
+		end for;
+	end for;
+	
 	return generators;
 end function;
 
@@ -115,8 +125,10 @@ function complex_dagger(M, cone_data)
 	K := cone_data`matrix_field;
 	sigma := Automorphisms(K)[2];
 	
+	//print M, Type(M);
 	for i in [1..NumberOfRows(M)] do
 		for j in [1..NumberOfColumns(M)] do
+			//print i,j;
 			M[i,j] := sigma(M[i,j]);
 		end for;
 	end for;
@@ -875,6 +887,7 @@ function lorentz_stabiliser_general(v_rec, cone_data : cone_voronoi_data := rec<
 end function;
 */
 
+/*
 function lorentz_stabiliser_general(v_rec, cone_data : cone_voronoi_data := rec<voronoi_data | >, special := true)
 	v := v_rec`point;
 	v := lorentz_clearDenoms([v])[1];
@@ -928,6 +941,29 @@ function lorentz_stabiliser_general(v_rec, cone_data : cone_voronoi_data := rec<
 	end for;
 	
 	return matrixGroupGenerators(stab);
+end function;
+*/
+
+function lorentz_stabiliser_general(v_rec, cone_data : cone_voronoi_data := rec<voronoi_data | >)
+	n := cone_data`matrix_size - 1;
+	q := [-InnerProduct(cone_data`ambient_space)[i,i] : i in [1..n]];
+	
+	Q := RationalsAsNumberField();
+	L := NumberFieldLatticeWithGram(DiagonalMatrix(Q, n+1, q cat [-1]));
+	
+	v := v_rec`point;
+	v := L ! lorentz_clearDenoms([v])[1];
+	
+	G := AutomorphismGroup(L, v);
+	stab := [];
+	
+	for g in G do
+		if Determinant(g) eq 1 then
+			Append(~stab, ChangeRing(g, Rationals()));
+		end if;
+	end for;
+	
+	return stab;
 end function;
 
 function lorentz_equivalent_general(v_rec, w_rec, cone_data : cone_voronoi_data := rec<voronoi_data | >)
