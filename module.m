@@ -46,11 +46,11 @@ function action_permutation(M, gamma : cartesian := false)
 			Append(~sigma, index);
 		end for;
 		
-		return sigma;
+		//return sigma;
 		
 		tau := [1..#sigma];
 		for i in [1..#sigma] do
-			tau[sigma[i]] = i;
+			tau[sigma[i]] := i;
 		end for;
 		
 		return tau;
