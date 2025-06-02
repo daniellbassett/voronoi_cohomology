@@ -963,7 +963,7 @@ function lorentz_stabiliser_general(v_rec, cone_data : cone_voronoi_data := rec<
 		end if;
 	end for;
 	
-	return stab;
+	return matrixGroupGenerators(stab);
 end function;
 
 function lorentz_equivalent_general(v_rec, w_rec, cone_data : cone_voronoi_data := rec<voronoi_data | >)
