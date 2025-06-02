@@ -20,7 +20,8 @@ equivariant_complex := recformat<
 	facet_equiv_orientation : SeqEnum, //whether a facet is compatibly-oriented with its equivalent representative
 	facet_cell_orientation : SeqEnum, //whether a facet is compatibly-oriented with its containing cell
 	facet_stabilisers : SeqEnum,
-	facet_cell_stabiliser_cosets : SeqEnum
+	facet_cell_stabiliser_cosets : SeqEnum,
+	coset_character : SeqEnum
 >;
 
 function right_cosets(H, G) //finds a transversal for the right cosets of H in G
@@ -68,7 +69,16 @@ function cellRepresentatives(top_cells, cone_data, cone_functions, cone_voronoi_
 		Append(~cell_facets, []);
 		
 		for rep in cell_reps[#cell_reps] do
-			Append(~cell_facets[#cell_facets], facets(rep));
+			facet_list := facets(rep);
+			interior_facet_list := [];
+			
+			for facet in facet_list do
+				if cone_functions`isInteriorPoint(barycentre(facet), cone_data) then
+					Append(~interior_facet_list, facet);
+				end if;
+			end for;
+			
+			Append(~cell_facets[#cell_facets], interior_facet_list);
 		end for;
 		
 		//find representatives for the cells in the new dimension
@@ -80,7 +90,7 @@ function cellRepresentatives(top_cells, cone_data, cone_functions, cone_voronoi_
 			Append(~facet_equiv_indices[#facet_equiv_indices], []);
 			Append(~facet_equiv_witnesses[#facet_equiv_indices], []);
 			
-			for facet in higher_cell_facets do
+			for facet in higher_cell_facets do				
 				if facet in cell_reps[#cell_reps] then
 					Append(~facet_equiv_indices[#facet_equiv_indices][#facet_equiv_indices[#facet_equiv_indices]], Index(cell_reps[#cell_reps], facet));
 					Append(~facet_equiv_witnesses[#facet_equiv_witnesses][#facet_equiv_witnesses[#facet_equiv_witnesses]], MatrixRing(cone_data`matrix_field, cone_data`matrix_size) ! 1);
@@ -150,7 +160,7 @@ function orientationCompatibility(orientable_reps, orientable_facets, orientable
 			Append(~facet_equiv_compatibility[i], []);
 			Append(~facet_cell_compatibility[i], []);
 			
-			if i lt #orientable_reps then 
+			if i lt #orientable_reps and #orientable_reps[i+1] gt 0 then 
 				for k in [1..#orientable_facets[i][j]] do				
 					Append(~facet_cell_compatibility[i][j], cone_functions`compatibleInducedCellOrientation(cellBasis(orientable_facets[i][j][k], cone_data), cellBasis(orientable_reps[i][j], cone_data)));
 					Append(~facet_equiv_compatibility[i][j], cone_functions`compatibleCellOrientation(cellBasis(orientable_reps[i+1][orientable_equiv_indices[i][j][k]], cone_data), cellBasis(orientable_facets[i][j][k], cone_data), orientable_equiv_witnesses[i][j][k], cone_data));
@@ -168,12 +178,14 @@ function stabilisers(orientable_reps, orientable_facets, cone_data, cone_functio
 	
 	facet_stabilisers := [];
 	facet_cell_stabiliser_cosets := [];
+	coset_character := [];
 	
 	for i in [1..#orientable_reps] do
 		Append(~cell_rep_stabilisers, []);
 		Append(~orientation_characters, []);
 		Append(~facet_stabilisers, []);
 		Append(~facet_cell_stabiliser_cosets, []);
+		Append(~coset_character, []);
 		
 		for j in [1..#orientable_reps[i]] do
 			Append(~cell_rep_stabilisers[i], cone_functions`stabiliser(rec<homogeneous_cone_point | point := barycentre(orientable_reps[i][j]), minimal_vectors := orientable_reps[i][j]>, cone_data : cone_voronoi_data := cone_voronoi_data));
@@ -185,6 +197,7 @@ function stabilisers(orientable_reps, orientable_facets, cone_data, cone_functio
 			
 			Append(~facet_stabilisers[i], []);
 			Append(~facet_cell_stabiliser_cosets[i], [**]);
+			Append(~coset_character[i], []);
 			
 			if i lt #orientable_reps then	
 				for k in [1..#orientable_facets[i][j]] do
@@ -195,21 +208,25 @@ function stabilisers(orientable_reps, orientable_facets, cone_data, cone_functio
 					
 					cap := intersection(cell_stab, facet_stab);
 					
-					Append(~facet_cell_stabiliser_cosets[i][j], right_cosets(cap, cell_stab));
+					Append(~facet_cell_stabiliser_cosets[i][j], [Matrix(m) : m in right_cosets(cap, cell_stab)]);
+					Append(~coset_character[i][j], []);
+					for g in facet_cell_stabiliser_cosets[i][j][k] do
+						Append(~coset_character[i][j][k], cone_functions`compatibleCellOrientation(cellBasis(orientable_reps[i][j], cone_data), cellBasis(orientable_reps[i][j], cone_data), g, cone_data));
+					end for;
 				end for;
 			end if;
 		end for;
 	end for;
 	
-	return cell_rep_stabilisers, facet_stabilisers, facet_cell_stabiliser_cosets, orientation_characters;
+	return cell_rep_stabilisers, facet_stabilisers, facet_cell_stabiliser_cosets, orientation_characters, coset_character;
 end function;
 
 function generateComplex(top_cells, cone : cone_voronoi_data := rec<voronoi_data | >)
 	cell_reps, cell_facets, facet_equiv_indices, facet_equiv_witnesses := cellRepresentatives(top_cells, cone`cone_data, cone`cone_functions, cone_voronoi_data);
-	
+
 	facet_equiv_compatibility, facet_cell_compatibility := orientationCompatibility(cell_reps, cell_facets, facet_equiv_indices, facet_equiv_witnesses, cone`cone_data, cone`cone_functions);
 	
-	cell_rep_stabilisers, facet_stabilisers, facet_cell_stabiliser_cosets, orientation_characters := stabilisers(cell_reps, cell_facets, cone`cone_data, cone`cone_functions : cone_voronoi_data := cone_voronoi_data);
+	cell_rep_stabilisers, facet_stabilisers, facet_cell_stabiliser_cosets, orientation_characters, coset_character := stabilisers(cell_reps, cell_facets, cone`cone_data, cone`cone_functions : cone_voronoi_data := cone_voronoi_data);
 	
 	return rec<equivariant_complex | 
 		cell_reps := cell_reps,
@@ -222,5 +239,6 @@ function generateComplex(top_cells, cone : cone_voronoi_data := rec<voronoi_data
 		facet_equiv_orientation := facet_equiv_compatibility,
 		facet_cell_orientation := facet_cell_compatibility,
 		facet_stabilisers := facet_stabilisers,
-		facet_cell_stabiliser_cosets := facet_cell_stabiliser_cosets>;
+		facet_cell_stabiliser_cosets := facet_cell_stabiliser_cosets,
+		coset_character := coset_character>;
 end function;
