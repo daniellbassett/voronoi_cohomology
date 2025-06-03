@@ -114,35 +114,16 @@ function action_matrix(M, gamma, character : cartesian := false)
 end function;
 
 function disjointCycleDecomposition(permutation)
-	cycles := [];
+	G := Sym(#permutation);
+	sigma := G ! permutation;
+	
+	cycles := [[cycle[i] : i in [1..#cycle]] : cycle in CycleDecomposition(sigma)];
 	cycle_indices := [1..#permutation];
-	cycle_count := 1;
-	
-	unused := [true : j in [1..#permutation]];
-	start := 1;
-	while start le #permutation do
-		if unused[start] then
-			cycle := [start];
-			unused[start] := false;
-			
-			cycle_indices[start] := cycle_count;
-			
-			next := permutation[cycle[#cycle]];
-			while next ne start do
-				unused[next] := false;
-				cycle_indices[next] := cycle_count;
-				Append(~cycle, next);
-				
-				next := permutation[next];
-			end while;
-			
-			Append(~cycles, cycle);
-			cycle_count +:= 1;
-		end if;
-		
-		start +:= 1;
-	end while;
-	
+	for i in [1..#cycles] do
+		for j in cycles[i] do
+			cycle_indices[j] := i;
+		end for;
+	end for;
 	return cycles, cycle_indices;
 end function;
 
@@ -166,12 +147,14 @@ function invariants_orientable(M, generators : cartesian := false)
 	
 	print "Cycles: ", Realtime(start_time);
 	
-	unused := [true : i in [1..#M`cosets]];
+	module_size := #M`cosets; //when cartesian, it recalculates over and over again for some reason?
+	
+	unused := [true : i in [1..module_size]];
 	blocks := [];
-	block_indices := [0 : i in [1..#M`cosets]];
+	block_indices := [0 : i in [1..module_size]];
 	
 	start := 1;
-	while start le #M`cosets do
+	while start le module_size do
 		if unused[start] then
 			block := [start];
 			new := [start];
@@ -467,7 +450,7 @@ end function;
 
 //--------------------------------------------------LORENTZ GAMMA_0--------------------------------------------------
 function projectiveStandardForm(v) //normalises so that the first non-zero coordinate is 1
-	for i in [1..NumberOfColumns(v)] do
+	for i in [NumberOfColumns(v)..1 by -1] do
 		if v[i] ne 0 then
 			return v / v[i];
 		end if;
@@ -490,6 +473,10 @@ function isotropicPoints(level, cone_data)
 	
 	isotropic_points := [];
 	for v in V_p do
+		if v[n+1] gt 1 then
+			break;
+		end if;
+		
 		if v eq V_p ! 0 then
 			continue;
 		end if;
