@@ -113,139 +113,107 @@ function action_matrix(M, gamma, character : cartesian := false)
 	end if;
 end function;
 
+function disjointCycleDecomposition(permutation)
+	cycles := [];
+	cycle_indices := [1..#permutation];
+	cycle_count := 1;
+	
+	unused := [true : j in [1..#permutation]];
+	start := 1;
+	while start le #permutation do
+		if unused[start] then
+			cycle := [start];
+			unused[start] := false;
+			
+			cycle_indices[start] := cycle_count;
+			
+			next := permutation[cycle[#cycle]];
+			while next ne start do
+				unused[next] := false;
+				cycle_indices[next] := cycle_count;
+				Append(~cycle, next);
+				
+				next := permutation[next];
+			end while;
+			
+			Append(~cycles, cycle);
+			cycle_count +:= 1;
+		end if;
+		
+		start +:= 1;
+	end while;
+	
+	return cycles, cycle_indices;
+end function;
+
 function invariants_orientable(M, generators : cartesian := false)
 	if #generators eq 0 then
 		return [[[i] : i in [1..#M`cosets]], [[] : i in [1..#M`cosets]], [1..#M`cosets]]; //which block it lies in, and sign matching whether positive or negative for that block
 		//return VectorSpace(M`base_field, #M`cosets);
 	end if;
 	
+	start_time := Realtime();
+	
 	cycles := [];
 	cycle_indices := [];
-	for i in [1..#generators] do
-		Append(~cycle_indices, [1..#M`cosets]);
-		g_permutation := action_permutation(M, generators[i] : cartesian := cartesian);
+	for g in generators do
+		g_permutation := action_permutation(M, g : cartesian := cartesian);
 		
-		g_cycles := [];
-		unused := [1..#M`cosets];
-		
-		while #unused gt 0 do
-			start := unused[1];
-			cycle := [start];
-			Exclude(~unused, start);
-			
-			cycle_indices[i][start] := #g_cycles + 1;
-			
-			while g_permutation[cycle[#cycle]] ne start do
-				Exclude(~unused, g_permutation[cycle[#cycle]]);
-				cycle_indices[i][g_permutation[cycle[#cycle]]] := #g_cycles + 1;
-				Append(~cycle, g_permutation[cycle[#cycle]]);
-			end while;
-			
-			Append(~g_cycles, cycle);
-		end while;
-		
+		g_cycles, g_cycle_indices := disjointCycleDecomposition(g_permutation);		
 		Append(~cycles, g_cycles);
+		Append(~cycle_indices, g_cycle_indices);
 	end for;
 	
-	unused := [1..#M`cosets];
+	print "Cycles: ", Realtime(start_time);
+	
+	unused := [true : i in [1..#M`cosets]];
 	blocks := [];
 	block_indices := [0 : i in [1..#M`cosets]];
-	while #unused gt 0 do
-		block := [unused[1]];
-		new := [block[1]];
-		Remove(~unused, 1);
-		
-		block_indices[block[1]] := #blocks + 1;
-		
-		while #new gt 0 do
-			for i in [1..#generators] do
-				for j in cycles[i][cycle_indices[i][new[1]]] do
-					if j notin block then
-						Append(~block, j);
-						Append(~new, j);
-						block_indices[j] := #blocks + 1;
-						
-						Remove(~unused, Index(unused, j));
-					end if;
-				end for;
-			end for;
+	
+	start := 1;
+	while start le #M`cosets do
+		if unused[start] then
+			block := [start];
+			new := [start];
+			unused[start] := false;
 			
-			Remove(~new, 1);
-		end while;
+			block_indices[block[1]] := #blocks + 1;
+			
+			while #new gt 0 do
+				for i in [1..#generators] do
+					for j in cycles[i][cycle_indices[i][new[1]]] do
+						if j notin block then
+							Append(~block, j);
+							Append(~new, j);
+							block_indices[j] := #blocks + 1;
+							
+							unused[j] := false;
+						end if;
+					end for;
+				end for;
+				
+				Remove(~new, 1);
+			end while;
+			
+			Append(~blocks, block);
+		end if;
 		
-		Append(~blocks, block);
+		start +:= 1;
 	end while;
 	
+	print "Cycles and blocks (orientable): ", Realtime(start_time);
+	
 	return [*blocks, [[] : i in [1..#blocks]], block_indices*];
-	
-	V := VectorSpace(M`base_field, #M`cosets);
-	
-	basis := [];
-	for i in [1..#blocks] do
-		v := V ! 0;
-		for j in blocks[i] do
-			v[j] := 1;
-		end for;
-		
-		Append(~basis, v);
-	end for;
-	
-	return sub<V | basis>;
 end function;
 
 function invariants(M, generators, orientation_character : cartesian := false)
 	if #generators eq 0 then
 		return [*[[i] : i in [1..#M`cosets]], [[] : i in [1..#M`cosets]], [1..#M`cosets]*];
-		//return VectorSpace(M`base_field, #M`cosets);
 	elif #generators eq 1 then
 		permutation := action_permutation(M, generators[1] : cartesian := cartesian);
-		
-		cycles := [];
-		cycle_indices := [0 : i in [1..#M`cosets]];
-		unused := [1..#M`cosets];
-		while #unused gt 0 do
-			start := unused[1];
-			cycle := [start];
-			Exclude(~unused, start);
-			
-			cycle_indices[start] := #cycles + 1;
-			
-			while permutation[cycle[#cycle]] ne start do
-				Exclude(~unused, permutation[cycle[#cycle]]);
-				Append(~cycle, permutation[cycle[#cycle]]);
-				cycle_indices[permutation[cycle[#cycle]]] := #cycles + 1;
-			end while;
-			
-			Append(~cycles, cycle);
-		end while;
+		cycles, cycle_indices := disjointCycleDecomposition(permutation);
 		
 		return [*cycles, [[] : i in [1..#cycles]], cycle_indices*];
-		
-		V := VectorSpace(M`base_field, #M`cosets);
-		basis := [];
-		if orientation_character[1] eq 1 then
-			for cycle in cycles do
-				v := V ! 0;
-				for i in cycle do
-					v[i] := 1;
-				end for;
-				
-				Append(~basis, v);
-			end for;
-		else
-			for cycle in cycles do
-				if #cycle mod 2 eq 0 then
-					v := V ! 0;
-					for i in [1..#cycle] do
-						v[i] := (-1)^i;
-					end for;
-					
-					Append(~basis, v);
-				end if;
-			end for;
-		end if;
-		
-		return sub<V | basis>;
 	else
 		//rearrange generators so that there is at most 1 with orientation_character = -1, and this is the last element
 		orientable := true;
@@ -274,46 +242,37 @@ function invariants(M, generators, orientation_character : cartesian := false)
 			end if;
 		end if;
 		
-		//calculate cycles for generator
+		start_time := Realtime();
+		//calculate cycles for generators
 		cycles := [];
 		cycle_indices := [];
+		print "\n";
+		cycle_count := 1;
 		for i in [1..#generators] do
-			Append(~cycle_indices, [1..#M`cosets]);
 			g_permutation := action_permutation(M, generators[i] : cartesian := cartesian);
+			print "Generator", i, "permutation: ", Realtime(start_time);
 			
-			g_cycles := [];
-			unused := [1..#M`cosets];
-			
-			while #unused gt 0 do
-				start := unused[1];
-				cycle := [start];
-				Exclude(~unused, start);
-				
-				cycle_indices[i][start] := #g_cycles + 1;
-				
-				while g_permutation[cycle[#cycle]] ne start do
-					Exclude(~unused, g_permutation[cycle[#cycle]]);
-					cycle_indices[i][g_permutation[cycle[#cycle]]] := #g_cycles + 1;
-					Append(~cycle, g_permutation[cycle[#cycle]]);
-				end while;
-				
-				Append(~g_cycles, cycle);
-			end while;
+			g_cycles, g_cycle_indices := disjointCycleDecomposition(g_permutation);
 			
 			Append(~cycles, g_cycles);
+			Append(~cycle_indices, g_cycle_indices);
+			print "Generator", i, "cycles: ", Realtime(start_time);
 		end for;
+		
+		print "Cycles: ", Realtime(start_time);
 		
 		//calculate blocks for orientation-preserving generators
 		if #generators gt 2 then
 			unused := [1..#M`cosets];
 			blocks := [];
 			block_indices := unused;
+			block_count := 1;
 			while #unused gt 0 do
 				block := [unused[1]];
 				new := [block[1]];
 				Remove(~unused, 1);
 				
-				block_indices[block[1]] := #blocks + 1;
+				block_indices[block[1]] := block_count;
 				
 				while #new gt 0 do
 					for i in [1..#generators-1] do
@@ -321,9 +280,9 @@ function invariants(M, generators, orientation_character : cartesian := false)
 							if j notin block then
 								Append(~block, j);
 								Append(~new, j);
-								block_indices[j] := #blocks + 1;
+								block_indices[j] := block_count;
 								
-								Remove(~unused, Index(unused, j));
+								Exclude(~unused, j);
 							end if;
 						end for;
 					end for;
@@ -332,11 +291,14 @@ function invariants(M, generators, orientation_character : cartesian := false)
 				end while;
 				
 				Append(~blocks, block);
+				block_count +:= 1;
 			end while;
 		else
 			blocks := cycles[1];
 			block_indices := cycle_indices[1];
 		end if;
+		
+		print "Cycles and blocks: ", Realtime(start_time);
 		
 		//calculate relations on blocks from the orientation-reversing generator
 		block_same_indices := [*{} : i in [1..#blocks]*];
@@ -364,10 +326,10 @@ function invariants(M, generators, orientation_character : cartesian := false)
 			end if;
 		end for;
 		
-		//construct basis from relations
-		V := VectorSpace(M`base_field, #M`cosets);
-		basis := [];
+		print "Cycles, blocks and relations: ", Realtime(start_time);
 		
+		//construct basis from relations
+		basis := [];
 		basis_count := 0;
 		
 		positive_indices := [];
@@ -375,100 +337,87 @@ function invariants(M, generators, orientation_character : cartesian := false)
 		
 		block_indices := [0 : i in [1..#M`cosets]];
 		
-		unused := [1..#blocks];
-		while #unused gt 0 do
-			start := unused[1];
-			
-			positive_blocks := block_same_indices[start];
-			negative_blocks := block_opposite_indices[start];
-			
-			if block_same_indices[start] meet block_opposite_indices[start] eq {} then
-				new_positive := [i : i in block_same_indices[start]];
-				new_negative := [i : i in block_opposite_indices[start]];
+		unused := [true : i in [1..#blocks]];
+		start := 1;
+		while start le #blocks do
+			if unused[start] then				
+				positive_blocks := block_same_indices[start];
+				negative_blocks := block_opposite_indices[start];
 				
-				while #new_positive + #new_negative gt 0 do
-					if #new_positive gt 0 then
-						for j in block_same_indices[new_positive[1]] do
-							if j notin positive_blocks then
-								Include(~positive_blocks, j);
-								Append(~new_positive, j);
-							end if;
+				if block_same_indices[start] meet block_opposite_indices[start] eq {} then
+					new_positive := [i : i in block_same_indices[start]];
+					new_negative := [i : i in block_opposite_indices[start]];
+					
+					while #new_positive + #new_negative gt 0 do
+						if #new_positive gt 0 then
+							for j in block_same_indices[new_positive[1]] do
+								if j notin positive_blocks then
+									Include(~positive_blocks, j);
+									Append(~new_positive, j);
+								end if;
+							end for;
+							
+							for j in block_opposite_indices[new_positive[1]] do
+								if j notin negative_blocks then
+									Include(~negative_blocks, j);
+									Append(~new_negative, j);
+								end if;
+							end for;
+							
+							Remove(~new_positive, 1);
+						end if;
+						
+						if #new_negative gt 0 then
+							for j in block_same_indices[new_negative[1]] do
+								if j notin negative_blocks then
+									Include(~negative_blocks, j);
+									Append(~new_negative, j);
+								end if;
+							end for;
+							
+							for j in block_opposite_indices[new_negative[1]] do
+								if j notin positive_blocks then
+									Include(~positive_blocks, j);
+									Append(~new_positive, j);
+								end if;
+							end for;
+							
+							Remove(~new_negative, 1);
+						end if;
+					end while;
+					
+					if positive_blocks meet negative_blocks eq {} then //success! this block is non-zero. time to build a basis vector
+						basis_count +:= 1;
+						
+						Append(~positive_indices, []);
+						Append(~negative_indices, []);
+						for i in positive_blocks do
+							for j in blocks[i] do
+								block_indices[j] := basis_count;
+								Append(~positive_indices[basis_count], j);
+							end for;
 						end for;
 						
-						for j in block_opposite_indices[new_positive[1]] do
-							if j notin negative_blocks then
-								Include(~negative_blocks, j);
-								Append(~new_negative, j);
-							end if;
+						for i in negative_blocks do
+							for j in blocks[i] do
+								block_indices[j] := -basis_count;
+								Append(~negative_indices[basis_count], j);
+							end for;
 						end for;
-						
-						Remove(~new_positive, 1);
 					end if;
-					
-					if #new_negative gt 0 then
-						for j in block_same_indices[new_negative[1]] do
-							if j notin negative_blocks then
-								Include(~negative_blocks, j);
-								Append(~new_negative, j);
-							end if;
-						end for;
-						
-						for j in block_opposite_indices[new_negative[1]] do
-							if j notin positive_blocks then
-								Include(~positive_blocks, j);
-								Append(~new_positive, j);
-							end if;
-						end for;
-						
-						Remove(~new_negative, 1);
-					end if;
-				end while;
-				
-				if positive_blocks meet negative_blocks eq {} then //success! this block is non-zero. time to build a basis vector
-					basis_count +:= 1;
-					
-					Append(~positive_indices, []);
-					Append(~negative_indices, []);
-					for i in positive_blocks do
-						for j in blocks[i] do
-							block_indices[j] := basis_count;
-							Append(~positive_indices[basis_count], j);
-						end for;
-					end for;
-					
-					for i in negative_blocks do
-						for j in blocks[i] do
-							block_indices[j] := -basis_count;
-							Append(~negative_indices[basis_count], j);
-						end for;
-					end for;
-					/*
-					v := V ! 0;
-					for i in positive_blocks do
-						for j in blocks[i] do
-							v[j] := 1;
-						end for;
-					end for;
-					
-					for i in negative_blocks do
-						for j in blocks[i] do
-							v[j] := -1;
-						end for;
-					end for;
-					
-					Append(~basis, v);
-					*/
 				end if;
+				
+				for i in positive_blocks join negative_blocks do
+					unused[i] := false;
+				end for;
 			end if;
 			
-			for i in positive_blocks join negative_blocks do
-				if i in unused then
-					Remove(~unused, Index(unused, i));
-				end if;
-			end for;			
+			start +:= 1;
 		end while;
+		
+		print "Basis: ", Realtime(start_time);
+		print "\n";
 		return [*positive_indices, negative_indices, block_indices*];
-		return sub<V | basis>;
 	end if;
 end function;
 //--------------------------------------------------BIANCHI GAMMA_0--------------------------------------------------
