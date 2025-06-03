@@ -8,20 +8,23 @@ import "symmetric_space.m" : barycentre;
 import "module.m" : invariants, action_permutation, action_matrix;
 
 function coboundaryMap(M, complex, d : verbosity := 0) //coboundary map in degree d: from dimension d-1 cells to dimension d cells
+	SetProfile(true);
 	codim := #complex`cell_reps-d;	
 	
 	total_matrix := <>;
 	
 	M_taus := [invariants(M, complex`cell_rep_stabilisers[codim+1][j], complex`orientation_characters[codim+1][j] : cartesian := M`cartesian) : j in [1..#complex`cell_reps[codim+1]]];
+	print "Facet invariants:", R ! GetMaximumMemoryUsage()/1024^3, "GB";
 	for i in [1..#complex`cell_reps[codim]] do //a higher-dim cell rep, sigma
 		if verbosity gt 0 then
 			print "\t\tcoboundary: Cell", i, "of", #complex`cell_reps[codim];
 		end if;
 		
 		M_sigma := invariants(M, complex`cell_rep_stabilisers[codim][i], complex`orientation_characters[codim][i] : cartesian := M`cartesian);
-		coord_space := VectorSpace(M`base_field, Dimension(M_sigma));
+		print "Cell invariants:", R ! GetMaximumMemoryUsage()/1024^3, "GB";
+		coord_space := VectorSpace(M`base_field, #M_sigma[1]);
 		
-		sigma_matrix := <RMatrixSpace(M`base_field, Dimension(M_taus[j]), Dimension(M_sigma)) ! 0 : j in [1..#complex`cell_reps[codim+1]]>;
+		sigma_matrix := <RMatrixSpace(M`base_field, #M_taus[j][1], #M_sigma[1]) ! 0 : j in [1..#complex`cell_reps[codim+1]]>;
 		
 		facet_barycentres := [barycentre(facet) : facet in complex`facets[codim][i]];
 		for j in [1..#complex`facets[codim][i]] do //a facet of sigma, tau
@@ -50,7 +53,10 @@ function coboundaryMap(M, complex, d : verbosity := 0) //coboundary map in degre
 			
 			if #complex`facet_cell_stabiliser_cosets[codim][i][j] eq 1 then //facet stabiliser contains cell stabiliser
 				index := complex`facet_equiv_indices[codim][i][j];
-				if Dimension(M_taus[index]) eq 0 then
+				//if Dimension(M_taus[index]) eq 0 then
+				//	continue;
+				//end if;
+				if #M_taus[index][1] eq 0 then
 					continue;
 				end if;
 						
@@ -62,16 +68,32 @@ function coboundaryMap(M, complex, d : verbosity := 0) //coboundary map in degre
 					end if;
 					
 					rows := [];
-					
-					for k in [1..Dimension(M_taus[index])] do
-						Append(~rows, coord_space ! Coordinates(M_sigma, M_taus[index].k));
+					orientation_factor := complex`facet_equiv_orientation[codim][i][j] * complex`facet_cell_orientation[codim][i][j];
+					for k in [1..#M_taus[index][1]] do
+						positive_sigma_block_indices := {M_sigma[3][l] : l in M_taus[index][1][k]};
+						negative_sigma_block_indices := {M_sigma[3][l] : l in M_taus[index][2][k]};
+						
+						v := coord_space ! 0;
+						for l in positive_sigma_block_indices do
+							if l gt 0 then
+								v[l] := orientation_factor;
+							elif l lt 0 then
+								v[-l] := -orientation_factor;
+							end if;
+						end for;
+						
+						for l in negative_sigma_block_indices do
+							if l gt 0 then
+								v[l] := -orientation_factor;
+							elif l lt 0 then
+								v[-l] := orientation_factor;
+							end if;
+						end for;
+						
+						Append(~rows, v);
 					end for;
 					
-					orientation_factor := complex`facet_equiv_orientation[codim][i][j] * complex`facet_cell_orientation[codim][i][j];
-					sigma_matrix[index] +:= orientation_factor * VerticalJoin(rows);
-					//if d eq 1 then
-					//	print orientation_factor * VerticalJoin(rows);
-					//end if;
+					sigma_matrix[index] +:= VerticalJoin(rows);
 				else
 					if verbosity gt 1 then
 						print "\t\t\tcoboundary: Facet", j, "of", #complex`facets[codim][i], "(permutation)";
@@ -97,28 +119,153 @@ function coboundaryMap(M, complex, d : verbosity := 0) //coboundary map in degre
 				end if;
 				
 				index := complex`facet_equiv_indices[codim][i][j];
-				if Dimension(M_taus[index]) eq 0 then
+				if #M_taus[index][1] eq 0 then
 					continue;
 				end if;
 								
 				gamma := complex`facet_equiv_witnesses[codim][i][j];
+				orientation_factor := complex`facet_equiv_orientation[codim][i][j] * complex`facet_cell_orientation[codim][i][j];
 				
+				permutations := [];
+				for k in [1..#complex`facet_cell_stabiliser_cosets[codim][i][j]] do
+					if verbosity gt 2 then
+						print "\t\t\t\tcorestriction: Coset", k, "of", #complex`facet_cell_stabiliser_cosets[codim][i][j];
+					end if;
+					Append(~permutations, action_permutation(M, gamma * complex`facet_cell_stabiliser_cosets[codim][i][j][k] : cartesian := M`cartesian));
+				end for;
+				
+				rows := [];
+				
+				/*
+				action_matrices := [];
+				for l in [1..#complex`cell_rep_stabilisers[codim][i]] do
+					g := complex`cell_rep_stabilisers[codim][i][l];
+					character := complex`orientation_characters[codim][i][l];
+					Append(~action_matrices, action_matrix(M, g, character : cartesian := M`cartesian));
+				end for;
+				
+				V := VectorSpace(M`base_field, #M`cosets);
+				sigma_basis := [];
+				for k in [1..#M_sigma[1]] do
+					v := V ! 0;
+					for l in M_sigma[1][k] do
+						v[l] := 1;
+					end for;
+					for l in M_sigma[2][k] do
+						v[l] := -1;
+					end for;
+					
+					Append(~sigma_basis, v);	
+				end for;
+				*/
+				
+				for k in [1..#M_taus[index][1]] do					
+					indices := [];
+					multiplicities := [];
+								
+					for l in [1..#permutations] do
+						positive_indices := [permutations[l][m] : m in M_taus[index][1][k]];
+						negative_indices := [permutations[l][m] : m in M_taus[index][2][k]];
+						
+						orientation_factor_gamma := orientation_factor * complex`coset_character[codim][i][j][l];
+						
+						for m in positive_indices do
+							indices_index := Index(indices, m);
+							if indices_index gt 0 then
+								multiplicities[indices_index] +:= orientation_factor_gamma;
+							else
+								Append(~indices, m);
+								Append(~multiplicities, orientation_factor_gamma);
+							end if;
+						end for;
+						
+						for m in negative_indices do
+							indices_index := Index(indices, m);
+							if indices_index gt 0 then
+								multiplicities[indices_index] -:= orientation_factor_gamma;
+							else
+								Append(~indices, m);
+								Append(~multiplicities, -orientation_factor_gamma);
+							end if;
+						end for;
+					end for;
+					
+					
+					
+					V := VectorSpace(M`base_field, #M`cosets);
+					w := V ! 0;
+					for l in [1..#indices] do
+						w[indices[l]] := multiplicities[l];
+					end for;					
+					
+					block_indices := [M_sigma[3][l] : l in indices];
+					v := coord_space ! 0;
+					for l in [1..#indices] do
+						if block_indices[l] gt 0 then
+							v[block_indices[l]] := multiplicities[l];
+						elif block_indices[l] lt 0 then
+							v[-block_indices[l]] := -multiplicities[l];
+						end if;
+					end for;
+					
+					/*
+					wPrime := V ! 0;
+					for l in [1..NumberOfColumns(v)] do
+						wPrime +:= v[l] * sigma_basis[l];
+					end for;
+					
+					print "agreement:", w eq wPrime;
+					
+					if w ne wPrime then
+						print w;
+						print wPrime;
+						print v;
+						print indices;
+						print M_sigma[1], M_sigma[2], M_sigma[3];
+					end if;
+					*/
+					
+					Append(~rows, v);
+				end for;
+				
+				/*
+				permutations := [];
+				for k in [1..#complex`facet_cell_stabiliser_cosets[codim][i][j]] do
+					if verbosity gt 2 then
+						print "\t\t\t\tcorestriction: Coset", k, "of", #complex`facet_cell_stabiliser_cosets[codim][i][j];
+					end if;
+					Append(~permutations, action_permutation(M, gamma * complex`facet_cell_stabiliser_cosets[codim][i][j][k] : cartesian := M`cartesian));
+				end for;
+				
+				
+				rows := [];
+				V := VectorSpace(M`base_field, #M`cosets);
+				for k in [1..Dimension(M_taus[index])] do
+					vector := V ! 0;
+					for l in [1..#complex`facet_cell_stabiliser_cosets[codim][i][j]] do
+						vector +:= (complex`coset_character[codim][i][j][l] * orientation_factor) * (V ! [Eltseq(M_taus[index].k)[permutations[l][m]] : m in [1..#permutations[l]]]);
+					end for;
+					
+					Append(~rows, coord_space ! Coordinates(M_sigma, M_sigma ! vector));
+				end for;
+				*/
+				
+				
+				/*
 				M_matrix := MatrixRing(M`base_field, #M`cosets) ! 0;
 				for k in [1..#complex`facet_cell_stabiliser_cosets[codim][i][j]] do
 					if verbosity gt 2 then
 						print "\t\t\t\tcorestriction: Coset", k, "of", #complex`facet_cell_stabiliser_cosets[codim][i][j];
 					end if;
-					M_matrix +:= action_matrix(M, gamma * complex`facet_cell_stabiliser_cosets[codim][i][j][k], complex`coset_character[codim][i][j][k] : cartesian := M`cartesian);
+					M_matrix +:= action_matrix(M, gamma * complex`facet_cell_stabiliser_cosets[codim][i][j][k], complex`coset_character[codim][i][j][k] * orientation_factor : cartesian := M`cartesian);
 				end for;
-				
-				orientation_factor := complex`facet_equiv_orientation[codim][i][j] * complex`facet_cell_orientation[codim][i][j];
-				M_matrix *:= orientation_factor;///#complex`facet_cell_stabiliser_cosets[codim][i][j];
 				
 				rows_uncoordinated := Rows(BasisMatrix(M_taus[index]) * M_matrix);
 				rows := [];
 				for k in [1..Dimension(M_taus[index])] do
 					Append(~rows, coord_space ! Coordinates(M_sigma, M_sigma ! rows_uncoordinated[k]));
 				end for;
+				*/
 				
 				//print VerticalJoin(rows), i, index;
 				sigma_matrix[index] +:= VerticalJoin(rows);
@@ -129,6 +276,9 @@ function coboundaryMap(M, complex, d : verbosity := 0) //coboundary map in degre
 	end for;
 	
 	mat := Matrix(HorizontalJoin(total_matrix));
+	G := ProfileGraph();
+	SetProfile(false);
+	//ProfilePrintByTotalTime(G);	
 	return mat;
 end function;
 
@@ -262,11 +412,11 @@ function homology(M, complex, degrees, with_torsion)
 			columns := 0;
 			
 			for i in [1..#complex`cell_reps[codim]] do
-				rows +:= Dimension(invariants(M, complex`cell_rep_stabilisers[codim][i], complex`orientation_characters[codim][i] : cartesian := M`cartesian));
+				rows +:= #invariants(M, complex`cell_rep_stabilisers[codim][i], complex`orientation_characters[codim][i] : cartesian := M`cartesian)[1];
 			end for;
 			
 			for i in [1..#complex`cell_reps[codim+1]] do
-				columns +:= Dimension(invariants(M, complex`cell_rep_stabilisers[codim+1][i], complex`orientation_characters[codim+1][i] : cartesian := M`cartesian));
+				columns +:= #invariants(M, complex`cell_rep_stabilisers[codim+1][i], complex`orientation_characters[codim+1][i] : cartesian := M`cartesian)[1];
 			end for;
 			
 			Append(~boundary_rows, rows);
@@ -281,7 +431,6 @@ function homology(M, complex, degrees, with_torsion)
 			Append(~boundary_ranks, Rank(map));
 			Append(~boundary_rows, NumberOfRows(map));
 			Append(~boundary_columns, NumberOfColumns(map));
-			
 			if with_torsion then
 				map := ChangeRing(map, Integers());
 				Append(~boundary_divisors,  ElementaryDivisors(map));
@@ -316,11 +465,16 @@ function homology(M, complex, degrees, with_torsion)
 			elif d+1 ne #complex`cell_reps then
 				i := Index(required_boundary_degrees, d);
 				Append(~data, boundary_rows[i] - boundary_ranks[i] - boundary_ranks[i+1]);
+				
+				if boundary_maps[i+1] * boundary_maps[i] ne 0 then
+					print "not a chain complex :(";
+				end if;
 			else
 				Append(~data, boundary_rows[#boundary_rows] - boundary_ranks[#boundary_ranks]);
 			end if;
 		end for;
 	end if;
 
+	print boundary_rows, boundary_columns, boundary_ranks;
 	return data;
 end function;
