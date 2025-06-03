@@ -9,9 +9,14 @@ import "module.m" : invariants, action_permutation, action_matrix;
 
 function coboundaryMap(M, complex, d : verbosity := 0) //coboundary map in degree d: from dimension d-1 cells to dimension d cells
 	SetProfile(true);
+	ResetMaximumMemoryUsage();
 	codim := #complex`cell_reps-d;	
 	
-	total_matrix := <>;
+	R := RealField(2);
+	
+	//total_matrix := <>;
+	total_matrix_sparse := [];
+	
 	
 	M_taus := [invariants(M, complex`cell_rep_stabilisers[codim+1][j], complex`orientation_characters[codim+1][j] : cartesian := M`cartesian) : j in [1..#complex`cell_reps[codim+1]]];
 	print "Facet invariants:", R ! GetMaximumMemoryUsage()/1024^3, "GB";
@@ -22,9 +27,10 @@ function coboundaryMap(M, complex, d : verbosity := 0) //coboundary map in degre
 		
 		M_sigma := invariants(M, complex`cell_rep_stabilisers[codim][i], complex`orientation_characters[codim][i] : cartesian := M`cartesian);
 		print "Cell invariants:", R ! GetMaximumMemoryUsage()/1024^3, "GB";
-		coord_space := VectorSpace(M`base_field, #M_sigma[1]);
+		//coord_space := VectorSpace(M`base_field, #M_sigma[1]);
 		
-		sigma_matrix := <RMatrixSpace(M`base_field, #M_taus[j][1], #M_sigma[1]) ! 0 : j in [1..#complex`cell_reps[codim+1]]>;
+		//sigma_matrix := <RMatrixSpace(M`base_field, #M_taus[j][1], #M_sigma[1]) ! 0 : j in [1..#complex`cell_reps[codim+1]]>;
+		sigma_matrix_sparse := [SparseMatrix(M`base_field, #M_taus[j][1], #M_sigma[1], []) : j in [1..#complex`cell_reps[codim+1]]];
 		
 		facet_barycentres := [barycentre(facet) : facet in complex`facets[codim][i]];
 		for j in [1..#complex`facets[codim][i]] do //a facet of sigma, tau
@@ -73,7 +79,7 @@ function coboundaryMap(M, complex, d : verbosity := 0) //coboundary map in degre
 						positive_sigma_block_indices := {M_sigma[3][l] : l in M_taus[index][1][k]};
 						negative_sigma_block_indices := {M_sigma[3][l] : l in M_taus[index][2][k]};
 						
-						v := coord_space ! 0;
+						v := 0;// coord_space ! 0;
 						for l in positive_sigma_block_indices do
 							if l gt 0 then
 								v[l] := orientation_factor;
@@ -93,21 +99,21 @@ function coboundaryMap(M, complex, d : verbosity := 0) //coboundary map in degre
 						Append(~rows, v);
 					end for;
 					
-					sigma_matrix[index] +:= VerticalJoin(rows);
+					//sigma_matrix[index] +:= VerticalJoin(rows);
 				else
 					if verbosity gt 1 then
 						print "\t\t\tcoboundary: Facet", j, "of", #complex`facets[codim][i], "(permutation)";
 					end if;
 					
 					permutation := action_permutation(M, gamma : cartesian := M`cartesian);
-					rows := [];
+					//rows := [];
 					
-					for k in [1..Dimension(M_taus[index])] do
-						Append(~rows, coord_space ! Coordinates(M_sigma, M_sigma ! [Eltseq(M_taus[index].k)[permutation[l]] : l in [1..#permutation]]));
-					end for;
+					//for k in [1..Dimension(M_taus[index])] do
+					//	Append(~rows, coord_space ! Coordinates(M_sigma, M_sigma ! [Eltseq(M_taus[index].k)[permutation[l]] : l in [1..#permutation]]));
+					//end for;
 					
 					orientation_factor := complex`facet_equiv_orientation[codim][i][j] * complex`facet_cell_orientation[codim][i][j];
-					sigma_matrix[index] +:= orientation_factor * VerticalJoin(rows);
+					//sigma_matrix[index] +:= orientation_factor * VerticalJoin(rows);
 					//if d eq 1 then
 					//	print orientation_factor * VerticalJoin(rows);
 					//end if;
@@ -133,31 +139,6 @@ function coboundaryMap(M, complex, d : verbosity := 0) //coboundary map in degre
 					end if;
 					Append(~permutations, action_permutation(M, gamma * complex`facet_cell_stabiliser_cosets[codim][i][j][k] : cartesian := M`cartesian));
 				end for;
-				
-				rows := [];
-				
-				/*
-				action_matrices := [];
-				for l in [1..#complex`cell_rep_stabilisers[codim][i]] do
-					g := complex`cell_rep_stabilisers[codim][i][l];
-					character := complex`orientation_characters[codim][i][l];
-					Append(~action_matrices, action_matrix(M, g, character : cartesian := M`cartesian));
-				end for;
-				
-				V := VectorSpace(M`base_field, #M`cosets);
-				sigma_basis := [];
-				for k in [1..#M_sigma[1]] do
-					v := V ! 0;
-					for l in M_sigma[1][k] do
-						v[l] := 1;
-					end for;
-					for l in M_sigma[2][k] do
-						v[l] := -1;
-					end for;
-					
-					Append(~sigma_basis, v);	
-				end for;
-				*/
 				
 				for k in [1..#M_taus[index][1]] do					
 					indices := [];
@@ -188,98 +169,38 @@ function coboundaryMap(M, complex, d : verbosity := 0) //coboundary map in degre
 								Append(~multiplicities, -orientation_factor_gamma);
 							end if;
 						end for;
-					end for;
-					
-					
-					
-					V := VectorSpace(M`base_field, #M`cosets);
-					w := V ! 0;
-					for l in [1..#indices] do
-						w[indices[l]] := multiplicities[l];
-					end for;					
+					end for;			
 					
 					block_indices := [M_sigma[3][l] : l in indices];
-					v := coord_space ! 0;
+					skip_indices := [];
 					for l in [1..#indices] do
-						if block_indices[l] gt 0 then
-							v[block_indices[l]] := multiplicities[l];
-						elif block_indices[l] lt 0 then
-							v[-block_indices[l]] := -multiplicities[l];
+						if Abs(block_indices[l]) in skip_indices or multiplicities[l] eq 0 then
+							continue;
 						end if;
+						
+						Append(~skip_indices, Abs(block_indices[l]));
+						
+						if block_indices[l] gt 0 then
+							sigma_matrix_sparse[index][k,block_indices[l]] +:= multiplicities[l];
+						elif block_indices[l] lt 0 then
+							sigma_matrix_sparse[index][k,-block_indices[l]] -:= multiplicities[l];
+						end if;
+						
 					end for;
-					
-					/*
-					wPrime := V ! 0;
-					for l in [1..NumberOfColumns(v)] do
-						wPrime +:= v[l] * sigma_basis[l];
-					end for;
-					
-					print "agreement:", w eq wPrime;
-					
-					if w ne wPrime then
-						print w;
-						print wPrime;
-						print v;
-						print indices;
-						print M_sigma[1], M_sigma[2], M_sigma[3];
-					end if;
-					*/
-					
-					Append(~rows, v);
 				end for;
-				
-				/*
-				permutations := [];
-				for k in [1..#complex`facet_cell_stabiliser_cosets[codim][i][j]] do
-					if verbosity gt 2 then
-						print "\t\t\t\tcorestriction: Coset", k, "of", #complex`facet_cell_stabiliser_cosets[codim][i][j];
-					end if;
-					Append(~permutations, action_permutation(M, gamma * complex`facet_cell_stabiliser_cosets[codim][i][j][k] : cartesian := M`cartesian));
-				end for;
-				
-				
-				rows := [];
-				V := VectorSpace(M`base_field, #M`cosets);
-				for k in [1..Dimension(M_taus[index])] do
-					vector := V ! 0;
-					for l in [1..#complex`facet_cell_stabiliser_cosets[codim][i][j]] do
-						vector +:= (complex`coset_character[codim][i][j][l] * orientation_factor) * (V ! [Eltseq(M_taus[index].k)[permutations[l][m]] : m in [1..#permutations[l]]]);
-					end for;
-					
-					Append(~rows, coord_space ! Coordinates(M_sigma, M_sigma ! vector));
-				end for;
-				*/
-				
-				
-				/*
-				M_matrix := MatrixRing(M`base_field, #M`cosets) ! 0;
-				for k in [1..#complex`facet_cell_stabiliser_cosets[codim][i][j]] do
-					if verbosity gt 2 then
-						print "\t\t\t\tcorestriction: Coset", k, "of", #complex`facet_cell_stabiliser_cosets[codim][i][j];
-					end if;
-					M_matrix +:= action_matrix(M, gamma * complex`facet_cell_stabiliser_cosets[codim][i][j][k], complex`coset_character[codim][i][j][k] * orientation_factor : cartesian := M`cartesian);
-				end for;
-				
-				rows_uncoordinated := Rows(BasisMatrix(M_taus[index]) * M_matrix);
-				rows := [];
-				for k in [1..Dimension(M_taus[index])] do
-					Append(~rows, coord_space ! Coordinates(M_sigma, M_sigma ! rows_uncoordinated[k]));
-				end for;
-				*/
-				
-				//print VerticalJoin(rows), i, index;
-				sigma_matrix[index] +:= VerticalJoin(rows);
 			end if;
 		end for;
 		
-		Append(~total_matrix, VerticalJoin(sigma_matrix));
+		print "Cell done:", R ! GetMaximumMemoryUsage()/1024^3, "GB";
+		Append(~total_matrix_sparse, VerticalJoin(sigma_matrix_sparse));
 	end for;
 	
-	mat := Matrix(HorizontalJoin(total_matrix));
+	mat_sparse := HorizontalJoin(total_matrix_sparse);
+	print "Map calculated:", R ! GetMaximumMemoryUsage()/1024^3, "GB";
 	G := ProfileGraph();
 	SetProfile(false);
-	//ProfilePrintByTotalTime(G);	
-	return mat;
+	ProfilePrintByTotalTime(G);	
+	return mat_sparse;
 end function;
 
 function cohomology(M, complex, degrees, with_torsion : verbosity := 0)
@@ -334,8 +255,7 @@ function cohomology(M, complex, degrees, with_torsion : verbosity := 0)
 			Append(~coboundary_rows, NumberOfRows(map));
 			Append(~coboundary_columns, NumberOfColumns(map));
 			
-			//Append(~coboundary_maps, map);
-			//print map;
+			Append(~coboundary_maps, map);
 			
 			if with_torsion then
 				map := ChangeRing(map, Integers());
@@ -354,7 +274,7 @@ function cohomology(M, complex, degrees, with_torsion : verbosity := 0)
 				i := Index(required_coboundary_degrees, d);
 				Append(~data, [coboundary_rows[i+1] - coboundary_ranks[i+1] - coboundary_ranks[i], &*coboundary_divisors[i]]);
 				
-				//print coboundary_maps[i] * coboundary_maps[i+1] eq 0;
+				print coboundary_maps[i] * coboundary_maps[i+1] eq 0;
 			else
 				Append(~data, [coboundary_columns[#coboundary_columns] - coboundary_ranks[#coboundary_ranks], &*coboundary_divisors[#coboundary_divisors]]);
 			end if;
@@ -369,7 +289,7 @@ function cohomology(M, complex, degrees, with_torsion : verbosity := 0)
 				Append(~data, coboundary_rows[i+1] - coboundary_ranks[i+1] - coboundary_ranks[i]);
 				//print "ker:", coboundary_rows[i+1] - coboundary_ranks[i+1], "im:", coboundary_ranks[i];
 				
-				//print coboundary_maps[i] * coboundary_maps[i+1] eq 0;
+				print coboundary_maps[i] * coboundary_maps[i+1] eq 0;
 			else
 				Append(~data, coboundary_columns[#coboundary_columns] - coboundary_ranks[#coboundary_ranks]);
 				//print "ker:", coboundary_columns[#coboundary_columns], "im:", coboundary_ranks[#coboundary_ranks];
@@ -424,19 +344,22 @@ function homology(M, complex, degrees, with_torsion)
 			
 			Append(~boundary_divisors, [1]);
 			
-			Append(~boundary_maps, 0);
+			//Append(~boundary_maps, 0);
 		else
 			map := Transpose(coboundaryMap(M, complex, d : verbosity := 10));
 			
 			Append(~boundary_ranks, Rank(map));
 			Append(~boundary_rows, NumberOfRows(map));
 			Append(~boundary_columns, NumberOfColumns(map));
+			print "Rank calculated:", RealField(2) ! GetMaximumMemoryUsage()/1024^3, "GB";
 			if with_torsion then
 				map := ChangeRing(map, Integers());
+				ResetMaximumMemoryUsage();
 				Append(~boundary_divisors,  ElementaryDivisors(map));
+				print "Torsion calculated:", RealField(2) ! GetMaximumMemoryUsage()/1024^3, "GB";
 			end if;
 			
-			Append(~boundary_maps, map);
+			//Append(~boundary_maps, map);
 		end if;
 	end for;
 	
@@ -451,9 +374,9 @@ function homology(M, complex, degrees, with_torsion)
 				i := Index(required_boundary_degrees, d);
 				Append(~data, [boundary_rows[i] - boundary_ranks[i] - boundary_ranks[i+1], &*boundary_divisors[i+1]]);
 				
-				if boundary_maps[i+1] * boundary_maps[i] ne 0 then
-					print "not a chain complex :(";
-				end if;
+				//if boundary_maps[i+1] * boundary_maps[i] ne 0 then
+				//	print "not a chain complex :(";
+				//end if;
 			else
 				Append(~data, [boundary_rows[#boundary_rows] - boundary_ranks[#boundary_ranks], 1]);
 			end if;
@@ -466,15 +389,14 @@ function homology(M, complex, degrees, with_torsion)
 				i := Index(required_boundary_degrees, d);
 				Append(~data, boundary_rows[i] - boundary_ranks[i] - boundary_ranks[i+1]);
 				
-				if boundary_maps[i+1] * boundary_maps[i] ne 0 then
-					print "not a chain complex :(";
-				end if;
+				//if boundary_maps[i+1] * boundary_maps[i] ne 0 then
+				//	print "not a chain complex :(";
+				//end if;
 			else
 				Append(~data, boundary_rows[#boundary_rows] - boundary_ranks[#boundary_ranks]);
 			end if;
 		end for;
 	end if;
-
-	print boundary_rows, boundary_columns, boundary_ranks;
+	
 	return data;
 end function;
