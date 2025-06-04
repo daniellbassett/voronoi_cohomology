@@ -201,7 +201,7 @@ function stabilisers(orientable_reps, orientable_facets, cone_data, cone_functio
 			
 			if i lt #orientable_reps then	
 				for k in [1..#orientable_facets[i][j]] do
-					Append(~facet_stabilisers[i][j], cone_functions`stabiliser(rec<homogeneous_cone_point | point := barycentre(orientable_facets[i][j][k]), minimal_vectors := orientable_facets[i][j][k]>, cone_data : cone_voronoi_data := cone_voronoi_data));
+					Append(~facet_stabilisers[i][j], cone_functions`stabiliser(rec<homogeneous_cone_point | point := barycentre(orientable_facets[i][j][k]), minimal_vectors := orientable_facets[i][j][k]>, cone_data : cone_voronoi_data := cone_voronoi_data, optimised_generators := false));
 					
 					cell_stab := MatrixGroup<cone_data`matrix_size, cone_data`matrix_field | cell_rep_stabilisers[i][j]>;
 					facet_stab := MatrixGroup<cone_data`matrix_size, cone_data`matrix_field | facet_stabilisers[i][j][k]>;

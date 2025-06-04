@@ -48,7 +48,7 @@ homogeneous_cone := recformat<
 >;
 
 //--------------------------------------------------GENERIC FUNCTIONS--------------------------------------------------
-function matrixGroupGenerators(G)
+function matrixGroupGenerators(G : optimised_representation := true)
 	generators := [];
 	
 	H := MatrixGroup<NumberOfRows(G[1]), Rationals() | generators>;
@@ -63,17 +63,21 @@ function matrixGroupGenerators(G)
 		end if;
 	end for;
 	
-	G_set := {g : g in G};
-	for d in [1..#generators-1] do
-		for S in Subsets(G_set, d) do
-			H := MatrixGroup<NumberOfRows(G[1]), Rationals() | [g : g in S]>;
-			if #H eq #G then
-				return [s : s in S];
-			end if;
+	if optimised_representation then
+		G_set := {g : g in G};
+		for d in [1..#generators-1] do
+			for S in Subsets(G_set, d) do
+				H := MatrixGroup<NumberOfRows(G[1]), Rationals() | [g : g in S]>;
+				if #H eq #G then
+					return [s : s in S];
+				end if;
+			end for;
 		end for;
-	end for;
-	
-	return generators;
+		
+		return generators;
+	else
+		return generators; //maybe replace with something to at least ensure the generating set is minimal by inclusion?
+	end if;
 end function;
 
 function cellBasis(V, cone_data)
@@ -562,7 +566,7 @@ function lorentz_clearDenoms(S) //scales a set of vectors S by a common factor s
 	return [scale_factor * s : s in S];	
 end function;
 
-function lorentz_stabiliser_standard(v_rec, cone_data : cone_voronoi_data := rec<voronoi_data | >, special := true)
+function lorentz_stabiliser_standard(v_rec, cone_data : cone_voronoi_data := rec<voronoi_data | >, special := true, optimised_generators := true)
 	v := v_rec`point;
 	v := lorentz_clearDenoms([v])[1];
 	
@@ -579,7 +583,7 @@ function lorentz_stabiliser_standard(v_rec, cone_data : cone_voronoi_data := rec
 		end if;
 	end for;
 	
-	return matrixGroupGenerators(stab);
+	return matrixGroupGenerators(stab : optimised_representation := optimised_generators);
 end function;
 
 function lorentz_equivalent_standard(v_rec, w_rec, cone_data : cone_voronoi_data := [])
@@ -607,7 +611,7 @@ function lorentz_equivalent_standard(v_rec, w_rec, cone_data : cone_voronoi_data
 			//return true, equivBy;
 			
 			if Determinant(equivBy) ne 1 then
-				stab := lorentz_stabiliser_standard(w_rec, cone_data : cone_voronoi_data := cone_voronoi_data, special := false); //O(n,1) stabiliser
+				stab := lorentz_stabiliser_standard(w_rec, cone_data : cone_voronoi_data := cone_voronoi_data, special := false, optimised_generators := false); //O(n,1) stabiliser
 				for g in stab do
 					if Determinant(g) eq -1 then
 						return true, equivBy * g;
@@ -754,195 +758,6 @@ function lorentz_compatibleInducedCellOrientation(low_basis, high_basis)
 		return -1;
 	end if;
 end function;
-
-/*
-function lorentz_stabiliser_general(v_rec, cone_data : cone_voronoi_data := rec<voronoi_data | >, special := true)
-	if assigned cone_voronoi_data`perfect_points then
-		v := v_rec`point;
-		
-		//find which voronoi cone(s) v lies within
-		for i in [1..#cone_voronoi_data`perfect_points] do
-			perfect_product := InnerProduct(v, cone_voronoi_data`perfect_points[i]`point);
-			best := true;
-			equalling_facets_v := [];
-			
-			for j in [1..#cone_voronoi_data`neighbours[i]] do
-				product := InnerProduct(v, cone_voronoi_data`neighbours[i][j]`point);
-				
-				if product lt perfect_product then
-					best := false;
-					break;
-				elif product eq perfect_product then
-					Append(~equalling_facets_v, j);
-				end if;
-			end for;
-			
-			if best then
-				containing_rep_v := i;
-				containing_classes_v := Sort([i] cat [cone_voronoi_data`neighbour_equiv_indices[i][j] : j in equalling_facets_v]);
-				break;
-			end if;
-		end for;
-		
-		multiplicity := 1;
-		for i in [1..#containing_classes_v] do
-			if containing_classes_v[i] eq containing_rep_v then
-				multiplicity +:= 1;
-			end if;
-		end for;
-		
-		cosets := [MatrixRing(Rationals(), cone_data`matrix_size) ! 1];
-		if multiplicity gt 1 then
-			for i in [1..#equalling_facets_v] do
-				if cone_voronoi_data`neighbour_equiv_indices[containing_rep_v][equalling_facets_v[i]] eq containing_rep_v then
-					Append(~cosets, cone_voronoi_data`neighbour_equiv_witnesses[containing_rep_v][equalling_facets_v[i]]);
-				end if;
-			end for;		
-		end if;
-		
-		stab := [];
-		for gamma in cone_voronoi_data`perfect_stabilisers[containing_rep_v] do
-			v_prime := v * gamma;
-			for g in cosets do
-				if v_prime * g eq v then
-					if Determinant(gamma*g) eq 1 or not special then
-						Append(~stab, gamma*g);
-					end if;
-				end if;
-			end for;
-		end for;
-		
-		return matrixGroupGenerators(stab);
-	else
-		min_vecs := v_rec`minimal_vectors;
-		min_vecs_basis := cellBasis(min_vecs, cone_data);
-		M := VerticalJoin(min_vecs_basis);
-		M_inv := M^-1;
-		stab := [];
-		
-		n := cone_data`matrix_size-1;
-		J := InnerProduct(cone_data`ambient_space);
-			
-		
-		
-		form_invariants := [lorentz_innerProduct(min_vecs_basis[1], min_vecs_basis[i]) : i in [2..n+1]];
-		
-		for vec in min_vecs do
-			vec_form_invariants := [lorentz_innerProduct(vec, vec2) : vec2 in min_vecs];
-		
-			possible := true;
-			invariant_match_indices := [[] : i in [1..n]]; //find which minimal vectors of v give the correct inner product to match with those of min_vecs_basis
-			for i in [1..n] do
-				invariant_match_indices[i] := [j : j in [1..#vec_form_invariants] | vec_form_invariants[j] eq form_invariants[i]];
-				
-				if #invariant_match_indices[i] eq 0 then
-					possible := false;
-					break;
-				end if;
-			end for;
-			
-			if not possible then
-				continue;
-			end if;
-			
-			multi_index := [1 : i in [1..n]];
-			while multi_index[n] le #invariant_match_indices[n] do
-				//construct
-				N := VerticalJoin([vec] cat [min_vecs[invariant_match_indices[i][multi_index[i]]] : i in [1..n]]);
-				gamma := M_inv * N;
-				
-				//check
-				integral := true;
-				for i in [1..n+1] do
-					for j in [1..n+1] do
-						if not IsIntegral(gamma[i,j]) then
-							integral := false;
-							break;
-						end if;
-					end for;
-				end for;
-				
-				if integral then
-					if gamma * J * Transpose(gamma) eq J then
-						//print count;
-						if Determinant(gamma) eq 1 or not special then
-							Append(~stab, gamma);
-						end if;
-					end if;
-				end if;
-				
-				//next candidate
-				multi_index[1] +:= 1;
-				for i in [1..n-1] do
-					if multi_index[i] gt #invariant_match_indices[i] then
-						multi_index[i] := 1;
-						multi_index[i+1] +:= 1;
-					end if;
-				end for;
-			end while;
-		end for;
-		
-		return matrixGroupGenerators(stab);		
-	end if;
-end function;
-*/
-
-/*
-function lorentz_stabiliser_general(v_rec, cone_data : cone_voronoi_data := rec<voronoi_data | >, special := true)
-	v := v_rec`point;
-	v := lorentz_clearDenoms([v])[1];
-	
-	n := cone_data`matrix_size - 1;
-	q := [-InnerProduct(cone_data`ambient_space)[i,i] : i in [1..n]];
-	J_Z := DiagonalMatrix(Integers(), [-1 : i in [1..n]] cat [1]); 
-	
-	K<rtd> := QuadraticField(Integers() ! q[1]);
-	D := DiagonalMatrix(K, [rtd] cat [1 : i in [1..n]]);
-	J := ChangeRing(J_Z, K);
-	
-	v_scaled := (VectorSpace(K, n+1) ! v) * D; //rescale to standard Lorentz cone
-	v_posrep := 2*(MatrixRing(K, NumberOfColumns(v)) ! Eltseq(TensorProduct(v_scaled, v_scaled))) - J;
-	
-	L := NumberFieldLatticeWithGram(v_posrep);
-	//print "lattice ready";
-	G := AutomorphismGroup(L);
-	//print "NF-lattice automorphism group calculated";
-	stab := [];
-	//print #G;
-	for g in G do
-		if g * J * Transpose(g) eq J then
-			gamma := Transpose(g);
-			if v_scaled * gamma ne v_scaled then
-				gamma := -gamma;
-			end if;
-			
-			if Determinant(gamma) eq 1 or not special then
-				gamma := D * gamma * D^-1;
-				integral := true;
-				for i in [1..NumberOfRows(gamma)] do
-					for j in [1..NumberOfColumns(gamma)] do
-						//check if gamma[i,j] is an integer
-						if not IsIntegral(gamma[i,j]) or Eltseq(gamma[i,j])[2] ne 0 then
-							integral := false;
-							break;
-						end if;
-					end for;
-					
-					if not integral then
-						break;
-					end if;
-				end for;
-				
-				if integral then
-					Append(~stab, ChangeRing(gamma, Rationals()));
-				end if;
-			end if;
-		end if;
-	end for;
-	
-	return matrixGroupGenerators(stab);
-end function;
-*/
 
 function lorentz_stabiliser_general(v_rec, cone_data : cone_voronoi_data := rec<voronoi_data | >)
 	n := cone_data`matrix_size - 1;
