@@ -245,7 +245,7 @@ function invariants(M, generators, orientation_character : cartesian := false)
 		
 		//calculate blocks for orientation-preserving generators
 		if #generators gt 2 then
-			blocks, block_indices := unionEquivalenceRelations(cycles, cycle_indices);
+			blocks, block_indices := unionEquivalenceRelations(Prune(cycles), Prune(cycle_indices));
 		else
 			blocks := cycles[1];
 			block_indices := cycle_indices[1];
