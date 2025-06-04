@@ -127,10 +127,52 @@ function disjointCycleDecomposition(permutation)
 	return cycles, cycle_indices;
 end function;
 
+function unionEquivalenceRelations(classes, class_indices) //equivalence relations are assumed to be on [1..#class_indices[1]]
+	set_size := #class_indices[1];
+	
+	unused := [true : i in [1..set_size]];
+	
+	blocks := [];
+	block_indices := [0 : i in [1..set_size]];
+	
+	start := 1;
+	block_count := 1;
+	while start le set_size do
+		if unused[start] then
+			block := [start];
+			new := [start];
+			unused[start] := false;
+			
+			block_indices[block[1]] := block_count;
+			
+			while #new gt 0 do
+				for i in [1..#classes] do
+					for j in classes[i][class_indices[i][new[1]]] do
+						if j notin block then
+							Append(~block, j);
+							Append(~new, j);
+							block_indices[j] := block_count;
+							
+							unused[j] := false;
+						end if;
+					end for;
+				end for;
+				
+				Remove(~new, 1);
+			end while;
+			
+			Append(~blocks, block);
+			block_count +:= 1;
+		end if;
+		start +:= 1;
+	end while;
+	
+	return blocks, block_indices;
+end function;
+
 function invariants_orientable(M, generators : cartesian := false)
 	if #generators eq 0 then
-		return [[[i] : i in [1..#M`cosets]], [[] : i in [1..#M`cosets]], [1..#M`cosets]]; //which block it lies in, and sign matching whether positive or negative for that block
-		//return VectorSpace(M`base_field, #M`cosets);
+		return [[[i] : i in [1..#M`cosets]], [[] : i in [1..#M`cosets]], [1..#M`cosets]];
 	end if;
 	
 	start_time := Realtime();
@@ -145,46 +187,7 @@ function invariants_orientable(M, generators : cartesian := false)
 		Append(~cycle_indices, g_cycle_indices);
 	end for;
 	
-	print "Cycles: ", Realtime(start_time);
-	
-	module_size := #M`cosets; //when cartesian, it recalculates over and over again for some reason?
-	
-	unused := [true : i in [1..module_size]];
-	blocks := [];
-	block_indices := [0 : i in [1..module_size]];
-	
-	start := 1;
-	while start le module_size do
-		if unused[start] then
-			block := [start];
-			new := [start];
-			unused[start] := false;
-			
-			block_indices[block[1]] := #blocks + 1;
-			
-			while #new gt 0 do
-				for i in [1..#generators] do
-					for j in cycles[i][cycle_indices[i][new[1]]] do
-						if j notin block then
-							Append(~block, j);
-							Append(~new, j);
-							block_indices[j] := #blocks + 1;
-							
-							unused[j] := false;
-						end if;
-					end for;
-				end for;
-				
-				Remove(~new, 1);
-			end while;
-			
-			Append(~blocks, block);
-		end if;
-		
-		start +:= 1;
-	end while;
-	
-	print "Cycles and blocks (orientable): ", Realtime(start_time);
+	blocks, block_indices := unionEquivalenceRelations(cycles, cycle_indices);
 	
 	return [*blocks, [[] : i in [1..#blocks]], block_indices*];
 end function;
@@ -220,6 +223,7 @@ function invariants(M, generators, orientation_character : cartesian := false)
 				swap := generators[first_index];
 				generators[first_index] := generators[#generators];
 				generators[#generators] := swap;
+				
 				orientation_character[first_index] := 1;
 				orientation_character[#generators] := -1;
 			end if;
@@ -229,66 +233,29 @@ function invariants(M, generators, orientation_character : cartesian := false)
 		//calculate cycles for generators
 		cycles := [];
 		cycle_indices := [];
-		print "\n";
 		cycle_count := 1;
 		for i in [1..#generators] do
 			g_permutation := action_permutation(M, generators[i] : cartesian := cartesian);
-			print "Generator", i, "permutation: ", Realtime(start_time);
 			
 			g_cycles, g_cycle_indices := disjointCycleDecomposition(g_permutation);
 			
 			Append(~cycles, g_cycles);
 			Append(~cycle_indices, g_cycle_indices);
-			print "Generator", i, "cycles: ", Realtime(start_time);
 		end for;
-		
-		print "Cycles: ", Realtime(start_time);
 		
 		//calculate blocks for orientation-preserving generators
 		if #generators gt 2 then
-			unused := [1..#M`cosets];
-			blocks := [];
-			block_indices := unused;
-			block_count := 1;
-			while #unused gt 0 do
-				block := [unused[1]];
-				new := [block[1]];
-				Remove(~unused, 1);
-				
-				block_indices[block[1]] := block_count;
-				
-				while #new gt 0 do
-					for i in [1..#generators-1] do
-						for j in cycles[i][cycle_indices[i][new[1]]] do
-							if j notin block then
-								Append(~block, j);
-								Append(~new, j);
-								block_indices[j] := block_count;
-								
-								Exclude(~unused, j);
-							end if;
-						end for;
-					end for;
-					
-					Remove(~new, 1);
-				end while;
-				
-				Append(~blocks, block);
-				block_count +:= 1;
-			end while;
+			blocks, block_indices := unionEquivalenceRelations(cycles, cycle_indices);
 		else
 			blocks := cycles[1];
 			block_indices := cycle_indices[1];
 		end if;
-		
-		print "Cycles and blocks: ", Realtime(start_time);
 		
 		//calculate relations on blocks from the orientation-reversing generator
 		block_same_indices := [*{} : i in [1..#blocks]*];
 		block_opposite_indices := [*{} : i in [1..#blocks]*];
 		for cycle in cycles[#generators] do
 			if #cycle mod 2 eq 0 then
-				//print cycle;
 				positive_blocks := {block_indices[cycle[i]] : i in [2..#cycle by 2]};
 				negative_blocks := {block_indices[cycle[i]] : i in [1..#cycle by 2]};
 				
@@ -309,8 +276,6 @@ function invariants(M, generators, orientation_character : cartesian := false)
 			end if;
 		end for;
 		
-		print "Cycles, blocks and relations: ", Realtime(start_time);
-		
 		//construct basis from relations
 		basis := [];
 		basis_count := 0;
@@ -327,7 +292,7 @@ function invariants(M, generators, orientation_character : cartesian := false)
 				positive_blocks := block_same_indices[start];
 				negative_blocks := block_opposite_indices[start];
 				
-				if block_same_indices[start] meet block_opposite_indices[start] eq {} then
+				if block_same_indices[start] meet block_opposite_indices[start] eq {} then //block not already forced to be 0 - 
 					new_positive := [i : i in block_same_indices[start]];
 					new_negative := [i : i in block_opposite_indices[start]];
 					
@@ -397,9 +362,6 @@ function invariants(M, generators, orientation_character : cartesian := false)
 			
 			start +:= 1;
 		end while;
-		
-		print "Basis: ", Realtime(start_time);
-		print "\n";
 		return [*positive_indices, negative_indices, block_indices*];
 	end if;
 end function;
