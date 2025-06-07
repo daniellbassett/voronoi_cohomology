@@ -15,11 +15,24 @@ coinduced_module := recformat<
 	cosets,
 	coset_recog : UserProgram,
 	action : UserProgram,
-	cartesian : BoolElt
+	cartesian : BoolElt,
+	helper_module
 >;
 
 //--------------------------------------------------GENERIC FUNCTIONS--------------------------------------------------
 function action_permutation(M, gamma : cartesian := false)
+	if assigned M`helper_module then //helper module 
+		helper_permutation := action_permutation(M`helper_module, gamma : cartesian := cartesian);
+		
+		sigma := [];
+		for i in [1..#M`cosets] do
+			image := Sort([helper_permutation[j] : j in M`cosets[i]]);
+			Append(~sigma, Index(M`cosets, image));
+		end for;
+		
+		return sigma;
+	end if;
+	
 	if cartesian then
 		components := NumberOfComponents(M`cosets);
 		
@@ -55,13 +68,13 @@ function action_permutation(M, gamma : cartesian := false)
 		
 		return tau;
 	else
-		sigma := [1..#M`cosets];
+		sigma := [];
 		
 		gamma := ChangeRing(gamma, M`coset_ring);
 		for i in [1..#M`cosets] do
 			image := M`coset_recog(M`action(M`cosets[i], gamma));
 			//sigma[Index(M`cosets, image)] := i;
-			sigma[i] := Index(M`cosets, image);
+			Append(~sigma, Index(M`cosets, image));
 		end for;
 		
 		return sigma;
@@ -564,16 +577,57 @@ end function;
 
 
 //--------------------------------------------------LORENTZ HIGHER ISOTROPIC STABILISERS--------------------------------------------------
-function isotropicSpaces(level, dimension, cone_data)
+function isotropicDimTwo(level, cone_data)
 	points := isotropicPoints(level, cone_data);
 	
 	n := Dimension(cone_data`ambient_space) - 1;
 	q := [-InnerProduct(cone_data`ambient_space)[i,i] : i in [1..n]];
 	V_p := VectorSpace(level, n+1, DiagonalMatrix(level, n+1, [-q[i] : i in [1..n]] cat [1]));
+	p := #level;
 	
+	skip_indices := [*{} : i in points*];
+	spaces := [];
+	for i in [1..#points] do
+		//print i;
+		for j in [i+1..#points] do
+			if j in skip_indices[i] then
+				continue;
+			end if;
+			
+			if InnerProduct(points[i], points[j]) eq 0 then				
+				//determine which skip_indices to add
+				point_indices := [i,j];
+				
+				for k in [1..p-1] do
+					point := projectiveStandardForm(points[i] + k * points[j]);
+					Append(~point_indices, Index(points, point));
+				end for;
+				
+				Append(~spaces, Sort(point_indices));
+				
+				Sort(~point_indices);
+				for k in [1..#point_indices] do
+					skip_indices[point_indices[k]] join:= {point_indices[l] : l in [k+1..#point_indices]};
+				end for;
+			end if;
+		end for;
+	end for;
+	
+	Sort(~spaces);
+	return spaces;
+end function;
+
+function isotropicSpaces(level, dimension, cone_data)	
 	if dimension eq 1 then
-		return points;
+		return isotropicPoints(level, cone_data);
 	elif dimension eq 2 then
+		/*
+		points := isotropicPoints(level, cone_data);
+		
+		n := Dimension(cone_data`ambient_space) - 1;
+		q := [-InnerProduct(cone_data`ambient_space)[i,i] : i in [1..n]];
+		V_p := VectorSpace(level, n+1, DiagonalMatrix(level, n+1, [-q[i] : i in [1..n]] cat [1]));
+	
 		spaces := [];
 		for i in [1..#points] do
 			for j in [i+1..#points] do
@@ -587,7 +641,16 @@ function isotropicSpaces(level, dimension, cone_data)
 		end for;
 		
 		return spaces;
+		*/
+		
+		return isotropicDimTwo(level, cone_data);
 	end if;
+	
+	points := isotropicPoints(level, cone_data);
+	
+	n := Dimension(cone_data`ambient_space) - 1;
+	q := [-InnerProduct(cone_data`ambient_space)[i,i] : i in [1..n]];
+	V_p := VectorSpace(level, n+1, DiagonalMatrix(level, n+1, [-q[i] : i in [1..n]] cat [1]));
 	
 	codim_one := isotropicSpaces(level, dimension-1, cone_data);
 	spaces := [];
@@ -618,10 +681,14 @@ function isotropicSpaces(level, dimension, cone_data)
 end function;
 
 function lorentzIsotropic_action(space, gamma)
+	/*
 	V_p := VectorSpace(Parent((space.1)[1]), NumberOfColumns(space.1), DiagonalMatrix(Parent((space.1)[1]), NumberOfColumns(space.1), [-1,-1,-1,-1,1]));
 	
 	basis := [space.i * gamma : i in [1..Dimension(space)]];
 	return sub<V_p | basis>;
+	*/
+	
+	return Sort([projectiveStandardForm(point * gamma) : point in space]);
 end function;
 
 function lorentzIsotropicStabiliserModule(base_field, level, dimension, cone)
@@ -655,7 +722,8 @@ function lorentzIsotropicStabiliserModule(base_field, level, dimension, cone)
 			cosets := isotropicSpaces(FiniteField(level, 1), dimension, cone`cone_data),
 			coset_recog := func<v | v>,
 			action := lorentzIsotropic_action,
-			cartesian := false
+			cartesian := false,
+			helper_module := lorentzGamma0Module(base_field, level, cone)
 		>;
 	end if;
 end function;
