@@ -20,64 +20,108 @@ coinduced_module := recformat<
 >;
 
 //--------------------------------------------------GENERIC FUNCTIONS--------------------------------------------------
-function action_permutation(M, gamma : cartesian := false)
-	if assigned M`helper_module then //helper module 
-		helper_permutation := action_permutation(M`helper_module, gamma : cartesian := cartesian);
-		
-		sigma := [];
-		for i in [1..#M`cosets] do
-			image := Sort([helper_permutation[j] : j in M`cosets[i]]);
-			Append(~sigma, Index(M`cosets, image));
-		end for;
-		
-		return sigma;
-	end if;
-	
+function action_permutation(M, gamma : cartesian := false, helper_factor := 0)
 	if cartesian then
-		components := NumberOfComponents(M`cosets);
-		
-		//generate permutations for each factor
-		gamma := ChangeRing(gamma, M`coset_ring);
-		permutations := [];
-		for i in [1..components] do
-			Append(~permutations, []);
-			for j in [1..#M`cosets[i]] do
-				image := M`coset_recog(M`action(M`cosets[i][j], gamma : factor := i) : factor := i);
-				Append(~permutations[i], Index(M`cosets[i], image));
+		if assigned M`helper_module then
+			if helper_factor eq 0 then
+				components := NumberOfComponents(M`cosets);
+				
+				gamma := ChangeRing(gamma, M`coset_ring);
+				helper_permutations := [];
+				for i in [1..components] do
+					Append(~helper_permutations, action_permutation(M, gamma : cartesian := true, helper_factor := i));
+				end for;
+				
+				permutations := [];
+				for i in [1..components] do
+					Append(~permutations, []);
+					for j in [1..#M`cosets[i]] do
+						image := Sort([helper_permutations[i][k] : k in M`cosets[i][j]]);
+						Append(~permutations[i], Index(M`cosets[i], image));
+					end for;
+				end for;
+				
+				component_sizes := [#M`cosets[i] : i in [1..components]];
+				size_products := [&*[component_sizes[j] : j in [i+1..components]] : i in [1..components-1]];
+				
+				sigma := [];
+				indices := [v : v in CartesianProduct([[1..component_sizes[i]] : i in [1..components]])];
+				for i in [1..#indices] do
+					permutation_indices := [permutations[j][indices[i][j]] : j in [1..components]];
+					index := &+[(permutation_indices[j] - 1) * size_products[j] : j in [1..components-1]] + permutation_indices[components];
+					
+					Append(~sigma, index);
+				end for;
+				
+				return sigma;
+			else
+				sigma := [];
+				
+				gamma := ChangeRing(gamma, M`coset_ring);
+				for i in [1..#M`helper_module`cosets[helper_factor]] do
+					image := M`helper_module`coset_recog(M`helper_module`action(M`helper_module`cosets[helper_factor][i], gamma : factor := helper_factor) : factor := helper_factor);
+					Append(~sigma, Index(M`helper_module`cosets[helper_factor], image));
+				end for;
+				
+				return sigma;
+			end if;
+		else
+			components := NumberOfComponents(M`cosets);
+				
+			//generate permutations for each factor
+			gamma := ChangeRing(gamma, M`coset_ring);
+			permutations := [];
+			for i in [1..components] do
+				Append(~permutations, []);
+				for j in [1..#M`cosets[i]] do
+					image := M`coset_recog(M`action(M`cosets[i][j], gamma : factor := i) : factor := i);
+					Append(~permutations[i], Index(M`cosets[i], image));
+				end for;
 			end for;
-		end for;
-		
-		component_sizes := [#M`cosets[i] : i in [1..components]];
-		size_products := [&*[component_sizes[j] : j in [i+1..components]] : i in [1..components-1]];
-		
-		sigma := [];
-		indices := [v : v in CartesianProduct([[1..component_sizes[i]] : i in [1..components]])];
-		for i in [1..#indices] do
-			permutation_indices := [permutations[j][indices[i][j]] : j in [1..components]];
-			index := &+[(permutation_indices[j] - 1) * size_products[j] : j in [1..components-1]] + permutation_indices[components];
 			
-			Append(~sigma, index);
-		end for;
-		
-		return sigma;
-		
-		tau := [1..#sigma];
-		for i in [1..#sigma] do
-			tau[sigma[i]] := i;
-		end for;
-		
-		return tau;
+			component_sizes := [#M`cosets[i] : i in [1..components]];
+			size_products := [&*[component_sizes[j] : j in [i+1..components]] : i in [1..components-1]];
+			
+			sigma := [];
+			indices := [v : v in CartesianProduct([[1..component_sizes[i]] : i in [1..components]])];
+			for i in [1..#indices] do
+				permutation_indices := [permutations[j][indices[i][j]] : j in [1..components]];
+				index := &+[(permutation_indices[j] - 1) * size_products[j] : j in [1..components-1]] + permutation_indices[components];
+				
+				Append(~sigma, index);
+			end for;
+			
+			return sigma;
+			
+			tau := [1..#sigma];
+			for i in [1..#sigma] do
+				tau[sigma[i]] := i;
+			end for;
+			
+			return tau;
+		end if;
 	else
-		sigma := [];
-		
-		gamma := ChangeRing(gamma, M`coset_ring);
-		for i in [1..#M`cosets] do
-			image := M`coset_recog(M`action(M`cosets[i], gamma));
-			//sigma[Index(M`cosets, image)] := i;
-			Append(~sigma, Index(M`cosets, image));
-		end for;
-		
-		return sigma;
+		if assigned M`helper_module then
+			helper_permutation := action_permutation(M`helper_module, gamma : cartesian := M`helper_module`cartesian);
+			
+			sigma := [];
+			for i in [1..#M`cosets] do
+				image := Sort([helper_permutation[j] : j in M`cosets[i]]);
+				Append(~sigma, Index(M`cosets, image));
+			end for;
+			
+			return sigma;
+		else
+			sigma := [];
+			
+			gamma := ChangeRing(gamma, M`coset_ring);
+			for i in [1..#M`cosets] do
+				image := M`coset_recog(M`action(M`cosets[i], gamma));
+				Append(~sigma, Index(M`cosets, image));
+			end for;
+			
+			return sigma;
+		end if;
 	end if;
 end function;
 
@@ -445,6 +489,12 @@ function isotropicPoints(level, cone_data)
 	q := [-InnerProduct(cone_data`ambient_space)[i,i] : i in [1..n]];
 	
 	V_p := VectorSpace(level, n+1, DiagonalMatrix(level, n+1, [-q[i] : i in [1..n]] cat [1]));
+	/*
+	M := DiagonalMatrix(level, n+1, [0,1,1,1,0]);
+	M[1,5] := 1/2;
+	M[5,1] := 1/2;
+	V_p := VectorSpace(level, n+1, M);
+	*/
 	
 	isotropic_points := [];
 	for v in V_p do
@@ -577,12 +627,22 @@ end function;
 
 
 //--------------------------------------------------LORENTZ HIGHER ISOTROPIC STABILISERS--------------------------------------------------
+
 function isotropicDimTwo(level, cone_data)
 	points := isotropicPoints(level, cone_data);
 	
 	n := Dimension(cone_data`ambient_space) - 1;
 	q := [-InnerProduct(cone_data`ambient_space)[i,i] : i in [1..n]];
 	V_p := VectorSpace(level, n+1, DiagonalMatrix(level, n+1, [-q[i] : i in [1..n]] cat [1]));
+	
+	//for cusp number calculations
+	/*
+	M := DiagonalMatrix(level, n+1, [0,1,1,1,0]);
+	M[1,5] := 1/2;
+	M[5,1] := 1/2;
+	V_p := VectorSpace(level, n+1, M);
+	*/
+	
 	p := #level;
 	
 	skip_indices := [*{} : i in points*];
@@ -621,31 +681,11 @@ function isotropicSpaces(level, dimension, cone_data)
 	if dimension eq 1 then
 		return isotropicPoints(level, cone_data);
 	elif dimension eq 2 then
-		/*
-		points := isotropicPoints(level, cone_data);
-		
-		n := Dimension(cone_data`ambient_space) - 1;
-		q := [-InnerProduct(cone_data`ambient_space)[i,i] : i in [1..n]];
-		V_p := VectorSpace(level, n+1, DiagonalMatrix(level, n+1, [-q[i] : i in [1..n]] cat [1]));
-	
-		spaces := [];
-		for i in [1..#points] do
-			for j in [i+1..#points] do
-				if InnerProduct(points[i], points[j]) eq 0 then
-					space := sub<V_p | [points[i], points[j]]>;
-					if space notin spaces then
-						Append(~spaces, space);
-					end if;
-				end if;
-			end for;
-		end for;
-		
-		return spaces;
-		*/
 		
 		return isotropicDimTwo(level, cone_data);
 	end if;
 	
+	//TODO: rewrite to use indices
 	points := isotropicPoints(level, cone_data);
 	
 	n := Dimension(cone_data`ambient_space) - 1;
@@ -680,15 +720,101 @@ function isotropicSpaces(level, dimension, cone_data)
 	return spaces;
 end function;
 
+function isotropicSpacesLevelTwo(dimension, cone_data)	
+	points := isotropicOrbitLevelTwo(cone_data);
+	if dimension eq 1 then
+		return points;
+	end if;
+	
+	n := Dimension(cone_data`ambient_space) - 1;
+	q := [-InnerProduct(cone_data`ambient_space)[i,i] : i in [1..n]];
+	V_p := VectorSpace(FiniteField(2,1), n+1, DiagonalMatrix(FiniteField(2,1), n+1, [-q[i] : i in [1..n]] cat [1]));
+	
+	//find basis for isotropic space
+	basis := [];
+	i := 1;
+	while #basis lt dimension do
+		if i gt #points then //unable to find large enough isotropic space
+			return false;
+		end if;
+		
+		orthogonal := true;
+		for j in [1..#basis] do
+			if InnerProduct(points[i], basis[j]) ne 0 then
+				orthogonal := false;
+				break;
+			end if;
+		end for;
+		
+		if orthogonal then
+			Append(~basis, points[i]);
+		end if;
+		
+		i +:= 1;
+	end while;
+	
+	W := sub<V_p | basis>;
+	spaces := [W];
+	//act by isometry group
+	G := DerivedGroup(IsometryGroup(V_p));
+	for g in G do
+		space := sub<V_p | [b * g : b in basis]>;
+		if space notin spaces then
+			Append(~spaces, space);
+		end if;
+	end for;
+	
+	//convert to points indices
+	indices := [];
+	for space in spaces do
+		space_indices := [];
+		for v in space do
+			if v ne 0 then
+				index := Index(points, v);
+				if index notin space_indices then
+					Append(~space_indices, index);
+				end if;
+			end if;
+		end for;
+		
+		Append(~indices, Sort(space_indices));
+	end for;
+	
+	return indices;
+end function;
+
 function lorentzIsotropic_action(space, gamma)
-	/*
-	V_p := VectorSpace(Parent((space.1)[1]), NumberOfColumns(space.1), DiagonalMatrix(Parent((space.1)[1]), NumberOfColumns(space.1), [-1,-1,-1,-1,1]));
-	
-	basis := [space.i * gamma : i in [1..Dimension(space)]];
-	return sub<V_p | basis>;
-	*/
-	
 	return Sort([projectiveStandardForm(point * gamma) : point in space]);
+end function;
+
+function lorentzIsotropic_action_cartesian(space, gamma : factor := 0)
+	primes := PrimeFactors(Characteristic(Parent(gamma[1,1])));
+	if factor eq 0 then
+		space_output := <>;
+		for i in [1..#primes] do
+			gamma_p := ChangeRing(gamma, FiniteField(primes[i], 1));
+			Append(~space_output, Sort([projectiveStandardForm(point * gamma_p) : point in space[i]]));
+		end for;
+		return space_output;
+	else
+		gamma_p := ChangeRing(gamma, FiniteField(primes[factor], 1)); 
+		return Sort([projectiveStandardForm(point * gamma_p) : point in space]);
+	end if;
+end function;
+
+function lorentzIsotropicSpaces_cartesian(level, dimension, cone_data)
+	primes := PrimeFactors(level);
+	
+	prime_levels := <>;
+	for p in primes do
+		if p gt 2 then
+			Append(~prime_levels, isotropicSpaces(FiniteField(p, 1), dimension, cone_data));
+		else
+			Append(~prime_levels, isotropicSpacesLevelTwo(dimension, cone_data));
+		end if;
+	end for;
+	
+	return CartesianProduct(prime_levels);
 end function;
 
 function lorentzIsotropicStabiliserModule(base_field, level, dimension, cone)
@@ -706,11 +832,25 @@ function lorentzIsotropicStabiliserModule(base_field, level, dimension, cone)
 			cartesian := false
 		>;
 	elif not IsPrime(level) then
-		print "Error in Lorentz isotropic stabiliser module generation: composite levels not yet supported";
+		return rec<coinduced_module | 
+			type := "lorentz_higher",
+			
+			base_field := base_field,
+			level := level,
+			
+			coset_ring := quo<Integers() | level*Integers()>,
+			cosets := lorentzIsotropicSpaces_cartesian(level, dimension, cone`cone_data),
+			coset_recog := func<v | v>,
+			action := lorentzIsotropic_action_cartesian,
+			cartesian := true,
+			helper_module := lorentzGamma0Module(base_field, level, cone)
+		>;
 	elif level eq 2 then
 		print "Error in Lorentz isotropic stabiliser module generation: p=2 not yet supported";
 	elif dimension gt cone`cone_data`matrix_size div 2 then
 		print "Error in Lorentz isotropic stabiliser module generation: dimension > 1/2 (n+1) not allowed";
+	elif not IsSquarefree(level) then
+		print "Error in Lorentz isotropic stabiliser module generation: non-squarefree levels not supported";
 	else
 		return rec<coinduced_module | 
 			type := "lorentz_higher",
@@ -727,3 +867,4 @@ function lorentzIsotropicStabiliserModule(base_field, level, dimension, cone)
 		>;
 	end if;
 end function;
+
