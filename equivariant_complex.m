@@ -24,35 +24,24 @@ equivariant_complex := recformat<
 	coset_character : SeqEnum
 >;
 
-function right_cosets(H, G) //finds a transversal for the right cosets of H in G
+
+function right_cosets(H, G)
 	transversal := [];
-	coset_union := [];
 	
-	for g in G do
-		if g notin coset_union then
-			Append(~transversal, g);
-			
-			for h in H do
-				Append(~coset_union, h*g);
-			end for;
-		end if;
-	end for;
+	G := Set(G);
+	while #G gt 0 do
+		rep := Representative(G);
+		Append(~transversal, rep);
+		G := G diff {h * rep : h in H};
+	end while;
 	
 	return transversal;
 end function;
 
-
-function intersection(H, K) //finds the intersection of two subgroups
-	cap := [];
-	
-	for h in H do
-		if h in K then
-			Append(~cap, h);
-		end if;
-	end for;
-	
-	return cap;
+function intersection(H, K)
+	return SetToSequence(Set(H) meet Set(K));
 end function;
+
 
 function cellRepresentatives(top_cells, cone_data, cone_functions, cone_voronoi_data)
 	//generate all cell reps from top_cells
@@ -181,6 +170,7 @@ function stabilisers(orientable_reps, orientable_facets, cone_data, cone_functio
 	coset_character := [];
 	
 	for i in [1..#orientable_reps] do
+		print i, "of", #orientable_reps;
 		Append(~cell_rep_stabilisers, []);
 		Append(~orientation_characters, []);
 		Append(~facet_stabilisers, []);
@@ -188,6 +178,7 @@ function stabilisers(orientable_reps, orientable_facets, cone_data, cone_functio
 		Append(~coset_character, []);
 		
 		for j in [1..#orientable_reps[i]] do
+			print "\t", j, "of", #orientable_reps[i];
 			Append(~cell_rep_stabilisers[i], cone_functions`stabiliser(rec<homogeneous_cone_point | point := barycentre(orientable_reps[i][j]), minimal_vectors := orientable_reps[i][j]>, cone_data : cone_voronoi_data := cone_voronoi_data));
 			
 			Append(~orientation_characters[i], []);
@@ -201,6 +192,7 @@ function stabilisers(orientable_reps, orientable_facets, cone_data, cone_functio
 			
 			if i lt #orientable_reps then	
 				for k in [1..#orientable_facets[i][j]] do
+					print "\t\t", k, "of", #orientable_facets[i][j];
 					Append(~facet_stabilisers[i][j], cone_functions`stabiliser(rec<homogeneous_cone_point | point := barycentre(orientable_facets[i][j][k]), minimal_vectors := orientable_facets[i][j][k]>, cone_data : cone_voronoi_data := cone_voronoi_data, optimised_generators := false));
 					
 					cell_stab := MatrixGroup<cone_data`matrix_size, cone_data`matrix_field | cell_rep_stabilisers[i][j]>;
@@ -223,10 +215,16 @@ end function;
 
 function generateComplex(top_cells, cone : cone_voronoi_data := rec<voronoi_data | >)
 	cell_reps, cell_facets, facet_equiv_indices, facet_equiv_witnesses := cellRepresentatives(top_cells, cone`cone_data, cone`cone_functions, cone_voronoi_data);
+	print "cell reps generated";
+	for i in [1..#cell_reps] do
+		print #cell_reps[i];
+	end for;
 
 	facet_equiv_compatibility, facet_cell_compatibility := orientationCompatibility(cell_reps, cell_facets, facet_equiv_indices, facet_equiv_witnesses, cone`cone_data, cone`cone_functions);
+	print "orientations generated";
 	
 	cell_rep_stabilisers, facet_stabilisers, facet_cell_stabiliser_cosets, orientation_characters, coset_character := stabilisers(cell_reps, cell_facets, cone`cone_data, cone`cone_functions : cone_voronoi_data := cone_voronoi_data);
+	print "stabilisers generated";
 	
 	return rec<equivariant_complex | 
 		cell_reps := cell_reps,
