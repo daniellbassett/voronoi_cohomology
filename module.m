@@ -484,17 +484,12 @@ function projectiveStandardFormCartesian(v : factor := 0)
 	end if;
 end function;
 
-function isotropicPoints(level, cone_data)
+function isotropicPoints(level, cone_data : character := 0)
 	n := Dimension(cone_data`ambient_space) - 1;
 	q := [-InnerProduct(cone_data`ambient_space)[i,i] : i in [1..n]];
 	
 	V_p := VectorSpace(level, n+1, DiagonalMatrix(level, n+1, [-q[i] : i in [1..n]] cat [1]));
-	/*
-	M := DiagonalMatrix(level, n+1, [0,1,1,1,0]);
-	M[1,5] := 1/2;
-	M[5,1] := 1/2;
-	V_p := VectorSpace(level, n+1, M);
-	*/
+	p := #level;
 	
 	isotropic_points := [];
 	for v in V_p do
@@ -507,7 +502,7 @@ function isotropicPoints(level, cone_data)
 		end if;
 		
 		if projectiveStandardForm(v) eq v then //take only one point on each line
-			if Norm(v) eq 0 then
+			if Norm(v) eq 0 then//LegendreSymbol(Integers() ! Norm(v), p) eq character then
 				Append(~isotropic_points, v);
 			end if;
 		end if;
@@ -516,15 +511,103 @@ function isotropicPoints(level, cone_data)
 	return Sort(isotropic_points);
 end function;
 
-function isotropicOrbitLevelTwo(cone_data)
+function lorentz_hyperbolicReflection(v, cone_data)
+	B := Basis(cone_data`ambient_space);
+	
+	images := [];
+	for b in B do
+		image := b - 2 * InnerProduct(b,v) / InnerProduct(v,v) * v;
+		Append(~images, cone_data`ambient_space ! Coordinates(cone_data`ambient_space, image));
+	end for;
+	
+	return VerticalJoin(images);
+end function;
+
+function lorentz_modTwoGroup(cone_data) //the reduction mod 2 of O(q; Z) (equivalently, of SO^\circ(q; Z))
+	n := Dimension(cone_data`ambient_space) - 1;
+	q := [-InnerProduct(cone_data`ambient_space)[i,i] : i in [1..n]];
+	F_2 := FiniteField(2,1);
+	
+	if 3 le n and n le 9 and q eq [1 : i in [1..n]] then //standard form, use generators from Vinberg's paper
+		generators := [];
+		
+		V := cone_data`ambient_space;
+		for i in [1..n-1] do
+			v := V ! ([0 : j in [1..i-1]] cat [1,-1] cat [0 : j in [i+2..n+1]]);
+			Append(~generators, ChangeRing(lorentz_hyperbolicReflection(v, cone_data), F_2));
+		end for;
+		
+		v := V ! ([0 : j in [1..n-1]] cat [1, 0]);
+		Append(~generators, ChangeRing(lorentz_hyperbolicReflection(v, cone_data), F_2));
+		
+		v := V ! ([1,1,1] cat [0 : j in [4..n]] cat [1]);
+		Append(~generators, ChangeRing(lorentz_hyperbolicReflection(v, cone_data), F_2));
+		
+		return MatrixGroup<n+1, F_2 | generators>;
+	else //not properly supported yet, give the same wrong answer as the code previously did for now
+		return DerivedGroup(IsometryGroup(VectorSpace()));
+	end if;
+end function;
+
+function lorentz_primePowerGroup(p, k, cone_data)
+	n := Dimension(cone_data`ambient_space) - 1;
+	q := [-InnerProduct(cone_data`ambient_space)[i,i] : i in [1..n]];
+	R := quo<Integers() | p^k * Integers()>;
+	
+	if 3 le n and n le 9 and q eq [1 : i in [1..n]] then //standard form, use generators from Vinberg's paper
+		generators := [];
+		
+		V := cone_data`ambient_space;
+		for i in [1..n-1] do
+			v := V ! ([0 : j in [1..i-1]] cat [1,-1] cat [0 : j in [i+2..n+1]]);
+			Append(~generators, ChangeRing(lorentz_hyperbolicReflection(v, cone_data), R));
+		end for;
+		
+		v := V ! ([0 : j in [1..n-1]] cat [1, 0]);
+		Append(~generators, ChangeRing(lorentz_hyperbolicReflection(v, cone_data), R));
+		
+		v := V ! ([1,1,1] cat [0 : j in [4..n]] cat [1]);
+		Append(~generators, ChangeRing(lorentz_hyperbolicReflection(v, cone_data), R));
+		
+		return generators;
+	end if;
+end function;
+
+function isotropicOrbitPrimePower(p, k, cone_data)
+	n := Dimension(cone_data`ambient_space) - 1;
+	q := [-InnerProduct(cone_data`ambient_space)[i,i] : i in [1..n]];
+	level := FiniteField(2,1);
+end function;
+
+function isotropicOrbitLevelTwo(cone_data : type := 1)
 	n := Dimension(cone_data`ambient_space) - 1;
 	q := [-InnerProduct(cone_data`ambient_space)[i,i] : i in [1..n]];
 	level := FiniteField(2,1);
 	
 	V_p := VectorSpace(level, n+1, DiagonalMatrix(level, n+1, [-q[i] : i in [1..n]] cat [1]));
 	
-	G := DerivedGroup(IsometryGroup(V_p));
-	initial_point := V_p ! ([1,1] cat [0 : i in [1..n-1]]);
+	
+	if type eq 1 then
+		if n eq 4 and q[1] eq 5 then
+			return Sort([V_p ! [1,0,0,0,1], V_p ! [0,1,0,0,1], V_p ! [0,0,1,0,1], V_p ! [0,0,0,1,1], V_p ! [1,1,1,1,0]]);
+		elif n eq 4 and q[1] eq 3 then
+			return Sort([V_p ! [1,0,0,0,1], V_p ! [0,0,1,1,0], V_p ! [1,1,1,1,0], V_p ! [0,1,0,1,0], V_p ! [0,1,1,1,1], V_p ! [0,1,1,0,0]]);
+		end if;
+	else
+		if n eq 4 and q[1] eq 5 then
+			return Sort([V_p ! [1,1,0,0,0], V_p ! [1,0,1,0,0], V_p ! [1,0,0,1,0], V_p ! [0,1,1,0,0], V_p ! [0,1,0,1,0], V_p ! [0,0,1,1,0], V_p ! [1,1,1,0,1], V_p ! [1,1,0,1,1], V_p ! [1,0,1,1,1], V_p ! [0,1,1,1,1]]);
+		elif n eq 4 and q[1] eq 3 then
+			return Sort([V_p ! [1,1,0,0,0], V_p ! [1,0,1,0,0], V_p ! [1,0,1,1,1], V_p ! [1,0,0,1,0], V_p ! [1,1,0,1,1], V_p ! [0,1,0,0,1], V_p ! [1,1,1,0,1], V_p ! [0,0,1,0,1], V_p ! [0,0,0,1,1]]);
+		end if;
+	end if;
+	
+	G := lorentz_modTwoGroup(cone_data);
+	if type ne 1 then
+		initial_point := V_p ! ([1,1] cat [0 : i in [1..n-1]]); //first orbit, order 10
+	else
+		initial_point := V_p ! ([1] cat [0 : i in [1..n-1]] cat [1]); //second orbit, order 5
+	end if;
+	
 	isotropic_points := [initial_point];
 	for g in G do
 		action := initial_point * g;
@@ -540,7 +623,7 @@ function lorentzGamma0_action(isotropic_point, gamma)
 	return isotropic_point * gamma;
 end function;
 
-function isotropicPointsCartesian(level, cone_data)
+function isotropicPointsCartesian(level, cone_data : even_type := 1)
 	primes := PrimeFactors(level);
 	
 	prime_levels := <>;
@@ -548,7 +631,7 @@ function isotropicPointsCartesian(level, cone_data)
 		if p gt 2 then
 			Append(~prime_levels, isotropicPoints(FiniteField(p,1), cone_data));
 		else
-			Append(~prime_levels, isotropicOrbitLevelTwo(cone_data));
+			Append(~prime_levels, isotropicOrbitLevelTwo(cone_data : type := even_type));
 		end if;
 	end for;
 	
@@ -566,7 +649,7 @@ function lorentzGamma0_actionCartesian(isotropic_point, gamma : factor := 0)
 	end if;
 end function;
 
-function lorentzGamma0Module(base_field, level, cone)
+function lorentzGamma0Module(base_field, level, cone : even_type := 1)
 	if level eq 1 then
 		return rec<coinduced_module | 
 			type := "lorentz_dim1",
@@ -591,7 +674,7 @@ function lorentzGamma0Module(base_field, level, cone)
 			level := level,
 			
 			coset_ring := quo<Integers() | level*Integers()>,
-			cosets := isotropicPointsCartesian(level, cone`cone_data),
+			cosets := isotropicPointsCartesian(level, cone`cone_data : even_type := even_type),
 			coset_recog := projectiveStandardFormCartesian,
 			action := lorentzGamma0_actionCartesian,
 			cartesian := true
@@ -604,7 +687,7 @@ function lorentzGamma0Module(base_field, level, cone)
 			level := level,
 			
 			coset_ring := FiniteField(level, 1),
-			cosets := isotropicOrbitLevelTwo(cone`cone_data),
+			cosets := isotropicOrbitLevelTwo(cone`cone_data : type := even_type),
 			coset_recog := projectiveStandardForm,
 			action := lorentzGamma0_action,
 			cartesian := false
@@ -627,7 +710,6 @@ end function;
 
 
 //--------------------------------------------------LORENTZ HIGHER ISOTROPIC STABILISERS--------------------------------------------------
-
 function isotropicDimTwo(level, cone_data)
 	points := isotropicPoints(level, cone_data);
 	
@@ -635,13 +717,6 @@ function isotropicDimTwo(level, cone_data)
 	q := [-InnerProduct(cone_data`ambient_space)[i,i] : i in [1..n]];
 	V_p := VectorSpace(level, n+1, DiagonalMatrix(level, n+1, [-q[i] : i in [1..n]] cat [1]));
 	
-	//for cusp number calculations
-	/*
-	M := DiagonalMatrix(level, n+1, [0,1,1,1,0]);
-	M[1,5] := 1/2;
-	M[5,1] := 1/2;
-	V_p := VectorSpace(level, n+1, M);
-	*/
 	
 	p := #level;
 	
@@ -730,6 +805,7 @@ function isotropicSpacesLevelTwo(dimension, cone_data)
 	q := [-InnerProduct(cone_data`ambient_space)[i,i] : i in [1..n]];
 	V_p := VectorSpace(FiniteField(2,1), n+1, DiagonalMatrix(FiniteField(2,1), n+1, [-q[i] : i in [1..n]] cat [1]));
 	
+	
 	//find basis for isotropic space
 	basis := [];
 	i := 1;
@@ -756,7 +832,7 @@ function isotropicSpacesLevelTwo(dimension, cone_data)
 	W := sub<V_p | basis>;
 	spaces := [W];
 	//act by isometry group
-	G := DerivedGroup(IsometryGroup(V_p));
+	G := lorentz_modTwoGroup(cone_data);
 	for g in G do
 		space := sub<V_p | [b * g : b in basis]>;
 		if space notin spaces then
@@ -846,7 +922,19 @@ function lorentzIsotropicStabiliserModule(base_field, level, dimension, cone)
 			helper_module := lorentzGamma0Module(base_field, level, cone)
 		>;
 	elif level eq 2 then
-		print "Error in Lorentz isotropic stabiliser module generation: p=2 not yet supported";
+		return rec<coinduced_module |
+			type := "lorentz_higher",
+			
+			base_field := base_field,
+			level := level,
+			
+			coset_ring := FiniteField(2,1),
+			cosets := isotropicSpacesLevelTwo(dimension, cone`cone_data),
+			coset_recog := func<v | v>,
+			action := lorentzIsotropic_action,
+			cartesian := false,
+			helper_module := lorentzGamma0Module(base_field, level, cone)
+		>;
 	elif dimension gt cone`cone_data`matrix_size div 2 then
 		print "Error in Lorentz isotropic stabiliser module generation: dimension > 1/2 (n+1) not allowed";
 	elif not IsSquarefree(level) then
