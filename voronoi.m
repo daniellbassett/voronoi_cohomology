@@ -5,6 +5,7 @@ TODO: write description
 */
 
 import "symmetric_space.m" : cellBasis, facets, homogeneous_cone_point, sign_orbit, barycentre;
+import "module.m" : disjointCycleDecomposition, unionEquivalenceRelations;
 
 voronoi_data := recformat<
 	perfect_points : SeqEnum,
@@ -217,10 +218,31 @@ function voronoiData(cone)
 		facet_barycentres := [barycentre(facet) : facet in facet_list];
 		
 		//only consider facets up to equivalence under the cell stabiliser
-		G := cone`cone_functions`stabiliser(rec<homogeneous_cone_point | point:=barycentre(perfect_point_list[next_to_test]`minimal_vectors)>, cone`cone_data : generators_only := false);
+		gens := cone`cone_functions`stabiliser(rec<homogeneous_cone_point | point:=barycentre(perfect_point_list[next_to_test]`minimal_vectors)>, cone`cone_data);
 		print "cell stabiliser calculated";
 		
+		permutations := [];
+		for g in gens do 
+			sigma := [];
+			for p in facet_barycentres do
+				Append(~sigma, Index(facet_barycentres, p * g));
+			end for;
+			
+			Append(~permutations, sigma);
+		end for;
 		
+		cycles := [];
+		indices := [];
+		for sigma in permutations do
+			cyc, ind := disjointCycleDecomposition(sigma);
+			Append(~cycles, cyc);
+			Append(~indices, ind);
+		end for;
+		
+		orbits := unionEquivalenceRelations(cycles, indices);
+		facet_reps := [o[1] : o in orbits];
+		
+		/*
 		facet_reps := [];
 		class_min_heights := [];
 		unfound := [true : i in [1..#facet_list]];
@@ -242,13 +264,14 @@ function voronoiData(cone)
 				end for;
 			end if;
 		end for;
+		*/
 		
 		
 		//no taking advantage of symmetry
 		//facet_reps := [1..#facet_list];
 		
 		
-		print #facet_list, "facets to test";
+		print "Facets to test:", facet_reps, "of", #facet_list;
 		
 		for facet_index in facet_reps do
 			facet := facet_list[facet_index];
@@ -279,7 +302,7 @@ function voronoiData(cone)
 				//Append(~perfect_stabilisers, cone`cone_functions`stabiliser(neighbouring_point, cone`cone_data : special := false));
 				
 				print "Class", #perfect_point_list, "with", #neighbouring_point`minimal_vectors, "minimal vectors";
-				print neighbouring_point;
+				print neighbouring_point`point;
 			end if;
 		end for;
 		
