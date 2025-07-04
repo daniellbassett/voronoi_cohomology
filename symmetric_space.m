@@ -48,15 +48,35 @@ homogeneous_cone := recformat<
 >;
 
 //--------------------------------------------------GENERIC FUNCTIONS--------------------------------------------------
-function matrixGroupGenerators(G : optimised_representation := true)
+function minimiseGeneratingSet(gens)
+	if #gens eq 0 then
+		return gens;
+	end if;
+	
+	G := MatrixGroup<NumberOfRows(gens[1]), Rationals() | gens>;
+	for i in [1..#gens] do
+		smaller_gens := Remove(gens,i);
+		H := MatrixGroup<NumberOfRows(gens[1]), Rationals() | smaller_gens>;
+		
+		if #H eq #G then
+			return minimiseGeneratingSet(smaller_gens);
+		end if;
+	end for;
+	
+	return gens;
+end function;
+
+function matrixGroupGenerators(gens : optimised_representation := false)
+	//optimised_representation := false;
 	generators := [];
 	
-	H := MatrixGroup<NumberOfRows(G[1]), Rationals() | generators>;
+	G := MatrixGroup<NumberOfRows(gens[1]), Rationals() | gens>;
+	H := MatrixGroup<NumberOfRows(gens[1]), Rationals() | generators>;
 	for g in G do
 		if g notin H then
 			Append(~generators, g);
 			
-			H := MatrixGroup<NumberOfRows(G[1]), Rationals() | generators>;
+			H := MatrixGroup<NumberOfRows(gens[1]), Rationals() | generators>;
 			if #H eq #G then
 				break;
 			end if;
@@ -66,8 +86,9 @@ function matrixGroupGenerators(G : optimised_representation := true)
 	if optimised_representation then
 		G_set := {g : g in G};
 		for d in [1..#generators-1] do
+			print d, "of", #generators-1;
 			for S in Subsets(G_set, d) do
-				H := MatrixGroup<NumberOfRows(G[1]), Rationals() | [g : g in S]>;
+				H := MatrixGroup<NumberOfRows(gens[1]), Rationals() | [g : g in S]>;
 				if #H eq #G then
 					return [s : s in S];
 				end if;
@@ -76,6 +97,7 @@ function matrixGroupGenerators(G : optimised_representation := true)
 		
 		return generators;
 	else
+		
 		return generators; //maybe replace with something to at least ensure the generating set is minimal by inclusion?
 	end if;
 end function;
@@ -275,7 +297,7 @@ function complex_imaginaryToRational(M)
 	return VerticalJoin(mat);
 end function;
 
-function complex_stabiliser(v_rec, cone_data : cone_voronoi_data := rec<voronoi_data | >)
+function complex_stabiliser(v_rec, cone_data : cone_voronoi_data := rec<voronoi_data | >, optimised_generators := false)
 	K := cone_data`matrix_field;
 	n := NumberOfRows(cone_data`basepoint) div 2;
 	O := MaximalOrder(K);
@@ -566,12 +588,70 @@ function lorentz_clearDenoms(S) //scales a set of vectors S by a common factor s
 	return [scale_factor * s : s in S];	
 end function;
 
-function lorentz_stabiliser_standard(v_rec, cone_data : cone_voronoi_data := rec<voronoi_data | >, special := true, optimised_generators := true)
+function lorentz_stabiliser_standard(v_rec, cone_data : cone_voronoi_data := rec<voronoi_data | >, special := true, generators_only := true, optimised_generators := true)
 	v := v_rec`point;
 	v := lorentz_clearDenoms([v])[1];
 	
 	L := LatticeWithGram(2*MatrixRing(Rationals(), NumberOfColumns(v)) ! Eltseq(TensorProduct(v,v)) - DiagonalMatrix(Rationals(), NumberOfColumns(v), [-1 : i in [1..NumberOfColumns(v)-1]] cat [1]));
 	G := AutomorphismGroup(L, [DiagonalMatrix(Integers(), NumberOfColumns(v), [-1 : i in [1..NumberOfColumns(v)-1]] cat [1])]);
+	
+	if not generators_only then
+		return [ChangeRing(Transpose(g), Rationals()) : g in G];
+	end if;
+	
+	gens := [ChangeRing(Transpose(gamma), Rationals()) : gamma in Generators(G)];
+	gens := minimiseGeneratingSet(gens);
+	
+	if special then
+		//take generators to all have same determinant
+		flip_index := 0;
+		for i in [1..#gens] do
+			if flip_index eq 0 then
+				if Determinant(gens[i]) eq -1 then
+					flip_index := i;
+					
+					for j in [1..i-1] do
+						gens[j] := gens[flip_index] * gens[j];
+					end for;
+				end if;
+			else
+				if Determinant(gens[i]) eq 1 then
+					gens[i] := gens[flip_index] * gens[i];
+				end if;
+			end if;
+		end for;
+		
+		//generators of special orthogonal
+		if flip_index ne 0 then
+			gens := minimiseGeneratingSet([gens[1] * gens[i] : i in [1..#gens]] cat [gens[1] * gens[i]^-1 : i in [2..#gens]]);
+		end if;
+		
+		//take generators to all have same bottom-right entry sign
+		flip_index := 0;
+		n_plus := NumberOfColumns(v);
+		for i in [1..#gens] do
+			if flip_index eq 0 then
+				if Sign(gens[i][n_plus,n_plus]) eq -1 then
+					flip_index := i;
+					
+					for j in [1..i-1] do
+						gens[j] := gens[flip_index] * gens[j];
+					end for;
+				end if;
+			else
+				if Sign(gens[i][n_plus,n_plus]) eq 1 then
+					gens[i] := gens[flip_index] * gens[i];
+				end if;
+			end if;
+		end for;
+		
+		//generators of connected component of the identity
+		if flip_index ne 0 then
+			gens := minimiseGeneratingSet([gens[1] * gens[i] : i in [1..#gens]] cat [gens[1] * gens[i]^-1 : i in [2..#gens]]);
+		end if;
+		
+		return gens;
+	end if;
 	
 	stab := [];
 	for g in G do
@@ -583,10 +663,11 @@ function lorentz_stabiliser_standard(v_rec, cone_data : cone_voronoi_data := rec
 		end if;
 	end for;
 	
+	print "\t\t\tcalculating generators";
 	return matrixGroupGenerators(stab : optimised_representation := optimised_generators);
 end function;
 
-function lorentz_equivalent_standard(v_rec, w_rec, cone_data : cone_voronoi_data := [])
+function lorentz_equivalent_standard(v_rec, w_rec, cone_data : cone_voronoi_data := [], known_stabiliser := [])
 	v := v_rec`point;
 	w := w_rec`point;
 	
@@ -608,13 +689,18 @@ function lorentz_equivalent_standard(v_rec, w_rec, cone_data : cone_voronoi_data
 				equivBy *:= -1;
 			end if;
 			
-			//return true, equivBy;
+			return true, equivBy;
 			
 			if Determinant(equivBy) ne 1 then
-				stab := lorentz_stabiliser_standard(w_rec, cone_data : cone_voronoi_data := cone_voronoi_data, special := false, optimised_generators := false); //O(n,1) stabiliser
+				if #known_stabiliser gt 0 then
+					stab := known_stabiliser;
+				else
+					stab := lorentz_stabiliser_standard(v_rec, cone_data : cone_voronoi_data := cone_voronoi_data, special := false, optimised_generators := false); //O(n,1) stabiliser
+				end if;
+				
 				for g in stab do
 					if Determinant(g) eq -1 then
-						return true, equivBy * g;
+						return true, g * equivBy;
 					end if;
 				end for;
 				
@@ -640,42 +726,91 @@ end function;
 function lorentz_boundaryPoints(height, cone_data) //TODO: rewrite to only take those with positive entries
 	n := Dimension(cone_data`ambient_space) - 1;
 	q := [-InnerProduct(cone_data`ambient_space)[i,i] : i in [1..n]];
+	q_last := InnerProduct(cone_data`ambient_space)[n+1,n+1];
 	
 	L := LatticeWithGram(DiagonalMatrix(Rationals(), n, q));
-	lattice_points := ShortVectors(L, height^2, height^2+1);
+	lattice_points := ShortVectorsProcess(L, q_last*height^2, q_last*height^2+1);
+	
+	avoid_height := q_last*height^2 + 1;
 	
 	vecs := [];
-	for l in lattice_points do
-		if l[2] eq height^2+1 then //all found of height^2
+	while true do
+		l, norm := NextVector(lattice_points);
+		if norm eq avoid_height then
+			continue;
+		elif norm eq -1 then
+			//print #vecs;
 			return vecs;
 		end if;
 		
-		Append(~vecs, cone_data`ambient_space ! (Eltseq(l[1]) cat [height]));
-		Append(~vecs, cone_data`ambient_space ! (Eltseq(-l[1]) cat [height]));
+		positive := true;
+		v := Eltseq(l);
+		for el in v do
+			if el lt 0 then
+				positive := false;
+				break;
+			end if;
+		end for;
+		
+		if positive then
+			Append(~vecs, cone_data`ambient_space ! (v cat [height]));
+		end if;
+	end while;
+end function;
+
+function sign_orbit(v, sign_flip_indices, cone_data)
+	points := [];
+	
+	t := #sign_flip_indices;
+	
+	for i in [2^t..2^(t+1)-1] do
+		bits := Prune(Intseq(i,2));
+		signs := [2*bit - 1 : bit in bits];
+		
+		w := v;
+		for j in [1..t] do
+			w[sign_flip_indices[j]] *:= signs[j];
+		end for;
+		p := cone_data`ambient_space ! w;
+		
+		if not p in points then
+			Append(~points, p);
+		end if;
 	end for;
 	
-	return vecs;
+	return points;
 end function;
 
 function lorentz_minimalVectors(p, cone_data)
 	min := Infinity();
 	height_bound := Infinity();
 	
+	p_signs := [Sign(p[i]) : i in [1..NumberOfColumns(p)]];
+	sign_flip_indices := [];
+	for i in [1..NumberOfColumns(p)] do
+		if p_signs[i] eq 0 then
+			p_signs[i] := 1;
+			Append(~sign_flip_indices, i);
+		end if;
+	end for;
+	
 	height := 1;
 	while height lt height_bound do
 		if height gt #cone_data`boundary_point_database then
-			print "\t\tminvecs: finding points of height", height, "/", height_bound;
+			//print "\t\tminvecs: finding points of height", height, "/", height_bound;
 			Append(~cone_data`boundary_point_database, lorentz_boundaryPoints(height, cone_data));
 		end if;
 		
 		for v in cone_data`boundary_point_database[height] do
-			p_component := lorentz_innerProduct(p, v);
+			w := cone_data`ambient_space ! [v[i] * p_signs[i] : i in [1..NumberOfColumns(p)]];
+			p_component := lorentz_innerProduct(p, w);
 			if p_component lt min then //new minimum found
 				min := p_component;
-				minimal_vectors := [v];
+				minimal_vectors := sign_orbit(w, sign_flip_indices, cone_data);
+				
 				height_bound := Minimum(height_bound, 2 * p[NumberOfColumns(p)] * min / lorentz_norm(p));
 			elif p_component eq min then
-				Append(~minimal_vectors, v);
+				minimal_vectors cat:= sign_orbit(w, sign_flip_indices, cone_data);
 			end if;
 		end for;
 		
@@ -759,17 +894,46 @@ function lorentz_compatibleInducedCellOrientation(low_basis, high_basis)
 	end if;
 end function;
 
-function lorentz_stabiliser_general(v_rec, cone_data : cone_voronoi_data := rec<voronoi_data | >)
+function lorentz_stabiliser_general(v_rec, cone_data : cone_voronoi_data := rec<voronoi_data | >, generators_only := true, optimised_generators := true, special := false)
 	n := cone_data`matrix_size - 1;
 	q := [-InnerProduct(cone_data`ambient_space)[i,i] : i in [1..n]];
+	q_last := InnerProduct(cone_data`ambient_space)[n+1,n+1];
 	
 	Q := RationalsAsNumberField();
-	L := NumberFieldLatticeWithGram(DiagonalMatrix(Q, n+1, q cat [-1]));
+	L := NumberFieldLatticeWithGram(DiagonalMatrix(Q, n+1, q cat [-q_last]));
 	
 	v := v_rec`point;
 	v := L ! lorentz_clearDenoms([v])[1];
 	
 	G := AutomorphismGroup(L, v);
+	
+	gens := [ChangeRing(g, Rationals()) : g in Generators(G)];
+	gens := minimiseGeneratingSet(gens);
+	
+	if special then
+		flip_index := 0
+		for i in [1..#gens] do
+			if flip_index eq 0 then
+				if Determinant(gens[i]) eq -1 then
+					flip_index := i;
+					for j in [1..i-1] do
+						gens[i] := gens[i] * gens[j];
+					end for;
+				end if;
+			else
+				if Determinant(gens[i]) eq 1 then
+					gens[i] := gens[i] * gens[flip_index];
+				end if;
+			end if;
+		end for;
+		
+		if flip_index ne 0 then
+			gens := minimiseGeneratingSet([gens[1] * gens[i] : i in [1..#gens]] cat [gens[1] * gens[i]^-1 : i in [2..#gens]]);
+		end if;
+	end if; 
+	
+	return gens;
+	
 	stab := [];
 	
 	for g in G do
@@ -778,15 +942,20 @@ function lorentz_stabiliser_general(v_rec, cone_data : cone_voronoi_data := rec<
 		end if;
 	end for;
 	
-	return matrixGroupGenerators(stab);
+	if not generators_only then
+		return stab;
+	end if;
+	
+	return matrixGroupGenerators(stab : optimised_representation := optimised_generators);
 end function;
 
-function lorentz_equivalent_general(v_rec, w_rec, cone_data : cone_voronoi_data := rec<voronoi_data | >)
+function lorentz_equivalent_general(v_rec, w_rec, cone_data : cone_voronoi_data := rec<voronoi_data | >, known_stabiliser := false)
 	n := cone_data`matrix_size - 1;
 	q := [-InnerProduct(cone_data`ambient_space)[i,i] : i in [1..n]];
+	q_last := InnerProduct(cone_data`ambient_space)[n+1,n+1];
 	
 	Q := RationalsAsNumberField();
-	L := NumberFieldLatticeWithGram(DiagonalMatrix(Q, n+1, q cat [-1]));
+	L := NumberFieldLatticeWithGram(DiagonalMatrix(Q, n+1, q cat [-q_last]));
 	
 	v := v_rec`point;
 	w := w_rec`point;
@@ -839,6 +1008,83 @@ function lorentz_isOrientableCell_general(vertices, cone_data : cone_voronoi_dat
 	end for;
 	
 	return true, basis, stab;
+end function;
+
+function lorentz_cuspStabiliser_standard(n)
+	generators := [];
+	
+	for i in [1..n-2] do
+		M := IdentityMatrix(Integers(), n+1);
+		M[1,1] := 0;
+		M[1,n+1] := -1;
+		M[n+1, 1] := 1;
+		M[n+1,n+1] := 2;
+		
+		M[1,i+1] := -1;
+		M[1,i+2] := 1;
+		
+		M[i+1,1] := 1;
+		M[i+2,1] := -1;
+		
+		M[n+1, i+1] := 1;
+		M[n+1, i+2] := -1;
+		
+		M[i+1, n+1] := 1;
+		M[i+2, n+1] := -1;
+		
+		Append(~generators, M);
+		
+		N := IdentityMatrix(Integers(), n+1);
+		N[i+1,i+1] := -1;
+		N[n,n] := -1;
+		
+		Append(~generators, N); 
+	end for;
+	
+	//last generator of D_n-1 lattice
+	M := IdentityMatrix(Integers(), n+1);
+	i := n-2;
+	M[1,1] := 0;
+	M[1,n+1] := -1;
+	M[n+1, 1] := 1;
+	M[n+1,n+1] := 2;
+	
+	M[1,i+1] := -1;
+	M[1,i+2] := -1;
+	
+	M[i+1,1] := 1;
+	M[i+2,1] := 1;
+	
+	M[n+1, i+1] := 1;
+	M[n+1, i+2] := 1;
+	
+	M[i+1, n+1] := 1;
+	M[i+2, n+1] := 1;
+	Append(~generators, M);
+	
+	
+	M := MatrixRing(Integers(), n+1) ! 0;
+	permutation := [1,3,2] cat [4..n+1];
+	
+	for i in [1..n+1] do
+		M[i, permutation[i]] := 1;
+	end for;
+	M[n,n] := -1;
+	Append(~generators, M);
+	
+	M := MatrixRing(Integers(), n+1) ! 0;
+	permutation := [1] cat [3..n] cat [2,n+1];
+	
+	for i in [1..n+1] do
+		M[i, permutation[i]] := 1;
+	end for;
+	
+	if n mod 2 ne 0 then
+		M[2, permutation[2]] := -1;
+	end if;
+	
+	Append(~generators, M);
+	return generators;
 end function;
 
 
