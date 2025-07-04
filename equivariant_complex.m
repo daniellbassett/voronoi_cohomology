@@ -4,8 +4,9 @@
 TODO: write description
 */
 
-import "symmetric_space.m" : barycentre, cellBasis, facets, homogeneous_cone_point;
+import "symmetric_space.m" : barycentre, cellBasis, facets, homogeneous_cone_point, minimiseGeneratingSet;
 import "voronoi.m" : voronoi_data;
+import "module.m" : disjointCycleDecomposition, unionEquivalenceRelations;
 
 equivariant_complex := recformat<
 	//Data about cells
@@ -25,7 +26,7 @@ equivariant_complex := recformat<
 >;
 
 
-function right_cosets(H, G)
+function right_cosets_old_old(H, G)
 	transversal := [];
 	
 	G := Set(G);
@@ -38,8 +39,53 @@ function right_cosets(H, G)
 	return transversal;
 end function;
 
-function intersection(H, K)
-	return SetToSequence(Set(H) meet Set(K));
+function right_cosets(H, G)
+	transversal := [];
+	
+	SetProfile(true);
+	G := Sort([g : g in G]);
+	
+	unused := [true : i in [1..#G]];
+	for i in [1..#G] do
+		if unused[i] then
+			Append(~transversal, G[i]);
+			for h in H do
+				unused[Index(G, h*G[i])] := false;
+			end for;
+		end if;
+	end for;
+	
+	G := ProfileGraph();
+	SetProfile(false);
+	ProfilePrintByTotalTime(G);
+	return transversal;
+end function;
+
+function right_cosets_geometric(H_barycentre, G)
+	SetProfile(true);
+
+	transversal := [];
+	transversal_inv := [];
+	
+	for g in G do
+		new := true;
+		for k in transversal_inv do
+			if H_barycentre * g * k eq H_barycentre then
+				new := false;
+				break;
+			end if;
+		end for;
+		
+		if new then
+			Append(~transversal, g);
+			Append(~transversal_inv, g^-1);
+		end if;
+	end for;
+	
+	G := ProfileGraph();
+	SetProfile(false);
+	ProfilePrintByTotalTime(G);
+	return transversal;
 end function;
 
 
@@ -190,21 +236,63 @@ function stabilisers(orientable_reps, orientable_facets, cone_data, cone_functio
 			Append(~facet_cell_stabiliser_cosets[i], [**]);
 			Append(~coset_character[i], []);
 			
-			if i lt #orientable_reps then	
+			if i lt #orientable_reps then				
+				cell_stab := MatrixGroup<cone_data`matrix_size, cone_data`matrix_field | cell_rep_stabilisers[i][j]>;
+				facet_barycentres := [barycentre(orientable_facets[i][j][k]) : k in [1..#orientable_facets[i][j]]];		
+				
+				facet_stabilisers[i][j] := [[] : k in [1..#orientable_facets[i][j]]];
+				facet_cell_stabiliser_cosets[i][j] := [*[] : k in [1..#orientable_facets[i][j]]*];
+				
+				unfound := [true : k in [1..#orientable_facets[i][j]]];
 				for k in [1..#orientable_facets[i][j]] do
+					if unfound[k] then
+						unfound[k] := false;
+						
+						stab_gens := cone_functions`stabiliser(rec<homogeneous_cone_point | point := barycentre(orientable_facets[i][j][k]), minimal_vectors := orientable_facets[i][j][k]>, cone_data : cone_voronoi_data := cone_voronoi_data, optimised_generators := false);
+						cap := cell_stab meet MatrixGroup<cone_data`matrix_size, cone_data`matrix_field | stab_gens>;
+						stab_cosets := right_cosets(cap, cell_stab);
+						
+						facet_stabilisers[i][j][k] := stab_gens;
+						facet_cell_stabiliser_cosets[i][j][k] := stab_cosets;
+						
+						for t in stab_cosets do
+							new_index := Index(facet_barycentres, facet_barycentres[k] * t);
+							if unfound[new_index] then
+								unfound[new_index] := false;
+								
+								facet_stabilisers[i][j][new_index] := [t^-1 * g * t : g in stab_gens];
+								facet_cell_stabiliser_cosets[i][j][new_index] := [t^-1 * g * t : g in stab_cosets];
+							end if;
+						end for;
+					end if;
+				end for;
+				
+				for k in [1..#orientable_facets[i][j]] do
+					/*
 					print "\t\t", k, "of", #orientable_facets[i][j];
+					
+					//SetProfile(true);
+					
 					Append(~facet_stabilisers[i][j], cone_functions`stabiliser(rec<homogeneous_cone_point | point := barycentre(orientable_facets[i][j][k]), minimal_vectors := orientable_facets[i][j][k]>, cone_data : cone_voronoi_data := cone_voronoi_data, optimised_generators := false));
 					
 					cell_stab := MatrixGroup<cone_data`matrix_size, cone_data`matrix_field | cell_rep_stabilisers[i][j]>;
 					facet_stab := MatrixGroup<cone_data`matrix_size, cone_data`matrix_field | facet_stabilisers[i][j][k]>;
 					
-					cap := intersection(cell_stab, facet_stab);
+					cap := cell_stab meet facet_stab;
 					
+					//can this be done geometrically instead?
 					Append(~facet_cell_stabiliser_cosets[i][j], [Matrix(m) : m in right_cosets(cap, cell_stab)]);
+					*/
 					Append(~coset_character[i][j], []);
+					
+					
 					for g in facet_cell_stabiliser_cosets[i][j][k] do
 						Append(~coset_character[i][j][k], cone_functions`compatibleCellOrientation(cellBasis(orientable_reps[i][j], cone_data), cellBasis(orientable_reps[i][j], cone_data), g, cone_data));
 					end for;
+					
+					//G := ProfileGraph();
+					//SetProfile(false);
+					//ProfilePrintByTotalTime(G);
 				end for;
 			end if;
 		end for;
@@ -220,11 +308,15 @@ function generateComplex(top_cells, cone : cone_voronoi_data := rec<voronoi_data
 		print #cell_reps[i];
 	end for;
 
+	
+	
 	facet_equiv_compatibility, facet_cell_compatibility := orientationCompatibility(cell_reps, cell_facets, facet_equiv_indices, facet_equiv_witnesses, cone`cone_data, cone`cone_functions);
 	print "orientations generated";
 	
+	
 	cell_rep_stabilisers, facet_stabilisers, facet_cell_stabiliser_cosets, orientation_characters, coset_character := stabilisers(cell_reps, cell_facets, cone`cone_data, cone`cone_functions : cone_voronoi_data := cone_voronoi_data);
 	print "stabilisers generated";
+
 	
 	return rec<equivariant_complex | 
 		cell_reps := cell_reps,
@@ -239,4 +331,12 @@ function generateComplex(top_cells, cone : cone_voronoi_data := rec<voronoi_data
 		facet_stabilisers := facet_stabilisers,
 		facet_cell_stabiliser_cosets := facet_cell_stabiliser_cosets,
 		coset_character := coset_character>;
+	
+	
+	return rec<equivariant_complex | 
+		cell_reps := cell_reps,
+		facets := cell_facets,
+		facet_equiv_indices := facet_equiv_indices,
+		facet_equiv_witnesses := facet_equiv_witnesses
+	>;
 end function;
