@@ -8,28 +8,19 @@ import "symmetric_space.m" : barycentre;
 import "module.m" : invariants, action_permutation, action_matrix;
 
 function coboundaryMap(M, complex, d : verbosity := 0) //coboundary map in degree d: from dimension d-1 cells to dimension d cells
-	SetProfile(true);
-	ResetMaximumMemoryUsage();
+	//SetProfile(true);
 	codim := #complex`cell_reps-d;	
-	
-	R := RealField(2);
-	
-	//total_matrix := <>;
+
 	total_matrix_sparse := [];
 	
 	
-	M_taus := [invariants(M, complex`cell_rep_stabilisers[codim+1][j], complex`orientation_characters[codim+1][j] : cartesian := M`cartesian) : j in [1..#complex`cell_reps[codim+1]]];
-	print "Facet invariants:", R ! GetMaximumMemoryUsage()/1024^3, "GB";
+	M_taus := [invariants(M, complex`cell_rep_stabilisers[codim+1][j], complex`orientation_characters[codim+1][j]) : j in [1..#complex`cell_reps[codim+1]]];
 	for i in [1..#complex`cell_reps[codim]] do //a higher-dim cell rep, sigma
 		if verbosity gt 0 then
 			print "\t\tcoboundary: Cell", i, "of", #complex`cell_reps[codim];
 		end if;
 		
-		M_sigma := invariants(M, complex`cell_rep_stabilisers[codim][i], complex`orientation_characters[codim][i] : cartesian := M`cartesian);
-		print "Cell invariants:", R ! GetMaximumMemoryUsage()/1024^3, "GB";
-		//coord_space := VectorSpace(M`base_field, #M_sigma[1]);
-		
-		//sigma_matrix := <RMatrixSpace(M`base_field, #M_taus[j][1], #M_sigma[1]) ! 0 : j in [1..#complex`cell_reps[codim+1]]>;
+		M_sigma := invariants(M, complex`cell_rep_stabilisers[codim][i], complex`orientation_characters[codim][i]);// : cartesian := M`cartesian);
 		sigma_matrix_sparse := [SparseMatrix(M`base_field, #M_taus[j][1], #M_sigma[1], []) : j in [1..#complex`cell_reps[codim+1]]];
 		
 		facet_barycentres := [barycentre(facet) : facet in complex`facets[codim][i]];
@@ -105,7 +96,7 @@ function coboundaryMap(M, complex, d : verbosity := 0) //coboundary map in degre
 						print "\t\t\tcoboundary: Facet", j, "of", #complex`facets[codim][i], "(permutation)";
 					end if;
 					
-					permutation := action_permutation(M, gamma : cartesian := M`cartesian);
+					permutation := action_permutation(M, gamma);
 					//rows := [];
 					
 					//for k in [1..Dimension(M_taus[index])] do
@@ -137,7 +128,7 @@ function coboundaryMap(M, complex, d : verbosity := 0) //coboundary map in degre
 					if verbosity gt 2 then
 						print "\t\t\t\tcorestriction: Coset", k, "of", #complex`facet_cell_stabiliser_cosets[codim][i][j];
 					end if;
-					Append(~permutations, action_permutation(M, gamma * complex`facet_cell_stabiliser_cosets[codim][i][j][k] : cartesian := M`cartesian));
+					Append(~permutations, action_permutation(M, gamma * complex`facet_cell_stabiliser_cosets[codim][i][j][k]));
 				end for;
 				
 				for k in [1..#M_taus[index][1]] do					
@@ -191,15 +182,13 @@ function coboundaryMap(M, complex, d : verbosity := 0) //coboundary map in degre
 			end if;
 		end for;
 		
-		print "Cell done:", R ! GetMaximumMemoryUsage()/1024^3, "GB";
 		Append(~total_matrix_sparse, VerticalJoin(sigma_matrix_sparse));
 	end for;
 	
 	mat_sparse := HorizontalJoin(total_matrix_sparse);
-	print "Map calculated:", R ! GetMaximumMemoryUsage()/1024^3, "GB";
-	G := ProfileGraph();
-	SetProfile(false);
-	ProfilePrintByTotalTime(G);	
+	//G := ProfileGraph();
+	//SetProfile(false);
+	//ProfilePrintByTotalTime(G);	
 	return mat_sparse;
 end function;
 
@@ -237,11 +226,11 @@ function cohomology(M, complex, degrees, with_torsion : verbosity := 0)
 			columns := 0;
 			
 			for i in [1..#complex`cell_reps[codim]] do
-				columns +:= Dimension(invariants(M, complex`cell_rep_stabilisers[codim][i], complex`orientation_characters[codim][i] : cartesian := M`cartesian));
+				columns +:= Dimension(invariants(M, complex`cell_rep_stabilisers[codim][i], complex`orientation_characters[codim][i]));
 			end for;
 			
 			for i in [1..#complex`cell_reps[codim+1]] do
-				rows +:= Dimension(invariants(M, complex`cell_rep_stabilisers[codim+1][i], complex`orientation_characters[codim+1][i] : cartesian := M`cartesian));
+				rows +:= Dimension(invariants(M, complex`cell_rep_stabilisers[codim+1][i], complex`orientation_characters[codim+1][i]));
 			end for;
 			
 			Append(~coboundary_rows, rows);
@@ -262,8 +251,9 @@ function cohomology(M, complex, degrees, with_torsion : verbosity := 0)
 				Append(~coboundary_divisors, ElementaryDivisors(map));
 			end if;
 		end if;
+		map := Integers() ! 0;
 	end for;
-	map := Integers() ! 0;
+	
 	
 	data := [];
 	if with_torsion then
@@ -300,7 +290,7 @@ function cohomology(M, complex, degrees, with_torsion : verbosity := 0)
 	return data;
 end function;
 
-function homology(M, complex, degrees, with_torsion)
+function homology(M, complex, degrees, with_torsion : verbosity := 0)
 	required_boundary_degrees := [];
 	for d in degrees do
 		if d gt 0 then
@@ -322,7 +312,10 @@ function homology(M, complex, degrees, with_torsion)
 	
 	required_boundary_degrees := Sort(SetToSequence(SequenceToSet(required_boundary_degrees)));	
 	for d in required_boundary_degrees do
-		print "\thomology: boundary degree", d;
+		if verbosity gt 0 then
+			print "\thomology: boundary degree", d;
+		end if;
+		
 		codim := #complex`cell_reps-d;
 		
 		if #complex`cell_reps[codim] eq 0 or #complex`cell_reps[codim+1] eq 0 then
@@ -332,38 +325,59 @@ function homology(M, complex, degrees, with_torsion)
 			columns := 0;
 			
 			for i in [1..#complex`cell_reps[codim]] do
-				rows +:= #invariants(M, complex`cell_rep_stabilisers[codim][i], complex`orientation_characters[codim][i] : cartesian := M`cartesian)[1];
+				print "\t\tinvariants of higher dim cell", i, "of", #complex`cell_reps[codim];
+				rows +:= #invariants(M, complex`cell_rep_stabilisers[codim][i], complex`orientation_characters[codim][i])[1];
 			end for;
 			
 			for i in [1..#complex`cell_reps[codim+1]] do
-				columns +:= #invariants(M, complex`cell_rep_stabilisers[codim+1][i], complex`orientation_characters[codim+1][i] : cartesian := M`cartesian)[1];
+				print "\t\tinvariants of lower dim cell", i, "of", #complex`cell_reps[codim+1];
+				columns +:= #invariants(M, complex`cell_rep_stabilisers[codim+1][i], complex`orientation_characters[codim+1][i])[1];
 			end for;
 			
 			Append(~boundary_rows, rows);
 			Append(~boundary_columns, columns);
+			if verbosity gt 1 then
+				print "\nBoundary matrix has", rows, "rows and", columns, "columns";
+			end if;
 			
 			Append(~boundary_divisors, [1]);
 			
-			//Append(~boundary_maps, 0);
+			Append(~boundary_maps, 0);
 		else
-			map := Transpose(coboundaryMap(M, complex, d : verbosity := 10));
+			map := Transpose(coboundaryMap(M, complex, d : verbosity := verbosity));
 			
-			Append(~boundary_ranks, Rank(map));
-			Append(~boundary_rows, NumberOfRows(map));
-			Append(~boundary_columns, NumberOfColumns(map));
-			print "Rank calculated:", RealField(2) ! GetMaximumMemoryUsage()/1024^3, "GB";
-			if with_torsion then
-				map := ChangeRing(map, Integers());
-				ResetMaximumMemoryUsage();
-				Append(~boundary_divisors,  ElementaryDivisors(map));
-				print "Torsion calculated:", RealField(2) ! GetMaximumMemoryUsage()/1024^3, "GB";
+			if verbosity gt 1 then
+				print "\n";
+				print "\t\tBoundary matrix has", NumberOfRows(map), "rows and", NumberOfColumns(map), "columns";
+				print "\t\tCalculating rank";
 			end if;
 			
-			//Append(~boundary_maps, map);
+			Append(~boundary_ranks, Rank(map));
+			if verbosity gt 1 then
+				print "\t\tRank:", boundary_ranks[#boundary_ranks];
+			end if;
+			
+			Append(~boundary_rows, NumberOfRows(map));
+			Append(~boundary_columns, NumberOfColumns(map));
+			if with_torsion then
+				map := ChangeRing(map, Integers());
+				if verbosity gt 1 then
+					print "\t\tCalculating torsion";
+				end if;
+				Append(~boundary_divisors,  ElementaryDivisors(map));
+				if verbosity gt 1 then
+					print "\t\tTorsion:", &*boundary_divisors[#boundary_divisors];
+					print "\t\t\tElementary divisors were:", [i : i in boundary_divisors[#boundary_divisors] | i gt 5];
+				end if;
+			end if;
+			
+			if verbosity gt 1 then
+				print "\n";
+			end if;
+			//delete map;
+			Append(~boundary_maps, Matrix(map));
 		end if;
 	end for;
-	
-	map := Integers() ! 0;
 	
 	data := [];
 	if with_torsion then
@@ -374,9 +388,10 @@ function homology(M, complex, degrees, with_torsion)
 				i := Index(required_boundary_degrees, d);
 				Append(~data, [boundary_rows[i] - boundary_ranks[i] - boundary_ranks[i+1], &*boundary_divisors[i+1]]);
 				
-				//if boundary_maps[i+1] * boundary_maps[i] ne 0 then
-				//	print "not a chain complex :(";
-				//end if;
+				if boundary_maps[i+1] * boundary_maps[i] ne 0 then
+					print "not a chain complex :( dying";
+					print 1/(1-1);
+				end if;
 			else
 				Append(~data, [boundary_rows[#boundary_rows] - boundary_ranks[#boundary_ranks], 1]);
 			end if;
