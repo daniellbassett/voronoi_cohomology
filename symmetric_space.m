@@ -625,46 +625,33 @@ function lorentz_stabiliser_standard(v_rec, cone_data : cone_voronoi_data := rec
 		if flip_index ne 0 then
 			gens := minimiseGeneratingSet([gens[1] * gens[i] : i in [1..#gens]] cat [gens[1] * gens[i]^-1 : i in [2..#gens]]);
 		end if;
-		
-		//take generators to all have same bottom-right entry sign
-		flip_index := 0;
-		n_plus := NumberOfColumns(v);
-		for i in [1..#gens] do
-			if flip_index eq 0 then
-				if Sign(gens[i][n_plus,n_plus]) eq -1 then
-					flip_index := i;
-					
-					for j in [1..i-1] do
-						gens[j] := gens[flip_index] * gens[j];
-					end for;
-				end if;
-			else
-				if Sign(gens[i][n_plus,n_plus]) eq 1 then
-					gens[i] := gens[flip_index] * gens[i];
-				end if;
-			end if;
-		end for;
-		
-		//generators of connected component of the identity
-		if flip_index ne 0 then
-			gens := minimiseGeneratingSet([gens[1] * gens[i] : i in [1..#gens]] cat [gens[1] * gens[i]^-1 : i in [2..#gens]]);
-		end if;
-		
-		return gens;
 	end if;
-	
-	stab := [];
-	for g in G do
-		gamma := MatrixRing(Rationals(), NumberOfColumns(v)) ! Transpose(g);
-		if v * gamma eq v then //could have v * gamma eq -v
-			if Determinant(gamma) eq 1 or not special then
-				Append(~stab, gamma);
+		
+	//take generators to all have same bottom-right entry sign
+	flip_index := 0;
+	n_plus := NumberOfColumns(v);
+	for i in [1..#gens] do
+		if flip_index eq 0 then
+			if Sign(gens[i][n_plus,n_plus]) eq -1 then
+				flip_index := i;
+				
+				for j in [1..i-1] do
+					gens[j] := gens[flip_index] * gens[j];
+				end for;
+			end if;
+		else
+			if Sign(gens[i][n_plus,n_plus]) eq 1 then
+				gens[i] := gens[flip_index] * gens[i];
 			end if;
 		end if;
 	end for;
 	
-	print "\t\t\tcalculating generators";
-	return matrixGroupGenerators(stab : optimised_representation := optimised_generators);
+	//generators of connected component of the identity
+	if flip_index ne 0 then
+		gens := minimiseGeneratingSet([gens[1] * gens[i] : i in [1..#gens]] cat [gens[1] * gens[i]^-1 : i in [2..#gens]]);
+	end if;
+	
+	return gens;
 end function;
 
 function lorentz_equivalent_standard(v_rec, w_rec, cone_data : cone_voronoi_data := [], known_stabiliser := [])
@@ -689,7 +676,7 @@ function lorentz_equivalent_standard(v_rec, w_rec, cone_data : cone_voronoi_data
 				equivBy *:= -1;
 			end if;
 			
-			return true, equivBy;
+			//return true, equivBy;
 			
 			if Determinant(equivBy) ne 1 then
 				if #known_stabiliser gt 0 then
@@ -911,7 +898,7 @@ function lorentz_stabiliser_general(v_rec, cone_data : cone_voronoi_data := rec<
 	gens := minimiseGeneratingSet(gens);
 	
 	if special then
-		flip_index := 0
+		flip_index := 0;
 		for i in [1..#gens] do
 			if flip_index eq 0 then
 				if Determinant(gens[i]) eq -1 then
